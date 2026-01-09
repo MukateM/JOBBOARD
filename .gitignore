@@ -1,0 +1,5 @@
+# In the main project folder
+C:\Users\hp\Desktop\Zedlink Careers> echo node_modules > .gitignore
+C:\Users\hp\Desktop\Zedlink Careers> echo .env >> .gitignore
+C:\Users\hp\Desktop\Zedlink Careers> echo dist >> .gitignore
+C:\Users\hp\Desktop\Zedlink Careers> echo build >> .gitignore
