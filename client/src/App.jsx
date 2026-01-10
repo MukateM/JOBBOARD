@@ -27,9 +27,9 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="min-h-screen bg-gray-50">
+        <div className="flex flex-col min-h-screen">
           <Navbar />
-          <main>
+          <main className="flex-grow">
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<Home />} />
@@ -81,7 +81,7 @@ function App() {
           </main>
           
           {/* Footer */}
-          <footer className="bg-gray-900 text-white py-8 mt-12">
+          <footer className="bg-gray-900 text-white py-8 mt-auto">
             <div className="container mx-auto px-4">
               <div className="flex flex-col md:flex-row justify-between items-center">
                 <div className="mb-4 md:mb-0">

@@ -1,57 +1,80 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, MapPin, Briefcase, DollarSign, Clock } from 'lucide-react';
 import axios from 'axios';
+import { useDebounce } from '../hooks/useDebounce';
 
 const API_URL = 'http://localhost:5000/api';
 
 export const Home = () => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    search: '',
-    location: '',
-    remote: false,
-    page: 1
-  });
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [location, setLocation] = useState('');
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({
     page: 1,
     pages: 1,
     total: 0
   });
 
+  // Debounce search inputs
+  const debouncedSearch = useDebounce(searchTerm, 500);
+  const debouncedLocation = useDebounce(location, 500);
+  
+  // Request cancellation
+  const cancelTokenRef = useRef(null);
+
   useEffect(() => {
     fetchJobs();
-  }, [filters.page]);
+    
+    // Cleanup on unmount
+    return () => {
+      if (cancelTokenRef.current) {
+        cancelTokenRef.current.cancel('Component unmounted');
+      }
+    };
+  }, [debouncedSearch, debouncedLocation, remoteOnly, currentPage]);
 
   const fetchJobs = async () => {
     try {
+      // Cancel previous request
+      if (cancelTokenRef.current) {
+        cancelTokenRef.current.cancel('New request initiated');
+      }
+
+      // Create new cancel token
+      cancelTokenRef.current = axios.CancelToken.source();
+
       setLoading(true);
+      setError(null);
+
       const params = new URLSearchParams({
-        page: filters.page,
+        page: currentPage,
         limit: 12,
-        ...(filters.search && { search: filters.search }),
-        ...(filters.location && { location: filters.location }),
-        ...(filters.remote && { remote: true })
+        ...(debouncedSearch && { search: debouncedSearch }),
+        ...(debouncedLocation && { location: debouncedLocation }),
+        ...(remoteOnly && { remote: true })
       });
 
-      const response = await axios.get(`${API_URL}/jobs?${params}`);
+      const response = await axios.get(`${API_URL}/jobs?${params}`, {
+        cancelToken: cancelTokenRef.current.token
+      });
       
       if (response.data.success) {
         setJobs(response.data.jobs);
         setPagination(response.data.pagination);
       }
     } catch (error) {
-      console.error('Failed to fetch jobs:', error);
+      if (!axios.isCancel(error)) {
+        console.error('Failed to fetch jobs:', error);
+        setError('Failed to load jobs. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setFilters(prev => ({ ...prev, page: 1 }));
-    fetchJobs();
   };
 
   const formatSalary = (min, max, currency) => {
@@ -59,6 +82,26 @@ export const Home = () => {
     if (min && max) return `${currency} ${min.toLocaleString()} - ${max.toLocaleString()}`;
     if (min) return `From ${currency} ${min.toLocaleString()}`;
     return `Up to ${currency} ${max.toLocaleString()}`;
+  };
+
+  // Smart pagination - show max 7 buttons
+  const getPaginationRange = () => {
+    const totalPages = pagination.pages;
+    const current = currentPage;
+    
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, '...', totalPages];
+    }
+    
+    if (current >= totalPages - 3) {
+      return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    
+    return [1, '...', current - 1, current, current + 1, '...', totalPages];
   };
 
   return (
@@ -75,7 +118,7 @@ export const Home = () => {
             </p>
             
             {/* Search Bar */}
-            <form onSubmit={handleSearch} className="bg-white rounded-lg shadow-xl p-4">
+            <div className="bg-white rounded-lg shadow-xl p-4">
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
                   <div className="relative">
@@ -83,9 +126,12 @@ export const Home = () => {
                     <input
                       type="text"
                       placeholder="Job title, keywords, or company"
-                      value={filters.search}
-                      onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setCurrentPage(1); // Reset to page 1 on search
+                      }}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -96,33 +142,32 @@ export const Home = () => {
                     <input
                       type="text"
                       placeholder="City, state, or remote"
-                      value={filters.location}
-                      onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      value={location}
+                      onChange={(e) => {
+                        setLocation(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900"
                     />
                   </div>
                 </div>
-                
-                <button
-                  type="submit"
-                  className="btn-primary py-3 px-8"
-                >
-                  Search Jobs
-                </button>
               </div>
               
               <div className="mt-4 flex items-center">
-                <label className="flex items-center">
+                <label className="flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={filters.remote}
-                    onChange={(e) => setFilters(prev => ({ ...prev, remote: e.target.checked }))}
+                    checked={remoteOnly}
+                    onChange={(e) => {
+                      setRemoteOnly(e.target.checked);
+                      setCurrentPage(1);
+                    }}
                     className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   />
                   <span className="ml-2 text-gray-700">Remote Only</span>
                 </label>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </div>
@@ -137,6 +182,13 @@ export const Home = () => {
             {pagination.total} jobs found
           </span>
         </div>
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
 
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -183,7 +235,7 @@ export const Home = () => {
                   
                   <div className="space-y-3 mb-6">
                     <div className="flex items-center text-gray-600">
-                      <MapPin className="h-4 w-4 mr-2" />
+                      <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
                       <span>
                         {job.location}
                         {job.remote_ok && ' • Remote'}
@@ -191,13 +243,13 @@ export const Home = () => {
                     </div>
                     
                     <div className="flex items-center text-gray-600">
-                      <Briefcase className="h-4 w-4 mr-2" />
+                      <Briefcase className="h-4 w-4 mr-2 flex-shrink-0" />
                       <span>{job.job_type}</span>
                     </div>
                     
                     {(job.salary_min || job.salary_max) && (
                       <div className="flex items-center text-gray-600">
-                        <DollarSign className="h-4 w-4 mr-2" />
+                        <DollarSign className="h-4 w-4 mr-2 flex-shrink-0" />
                         <span>
                           {formatSalary(job.salary_min, job.salary_max, job.salary_currency)}
                         </span>
@@ -205,7 +257,7 @@ export const Home = () => {
                     )}
                     
                     <div className="flex items-center text-gray-600">
-                      <Clock className="h-4 w-4 mr-2" />
+                      <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
                       <span className="text-sm">
                         {new Date(job.created_at).toLocaleDateString()}
                       </span>
@@ -221,36 +273,40 @@ export const Home = () => {
               ))}
             </div>
 
-            {/* Pagination */}
+            {/* Improved Pagination */}
             {pagination.pages > 1 && (
               <div className="mt-12 flex justify-center">
                 <nav className="flex items-center space-x-2">
                   <button
-                    onClick={() => setFilters(prev => ({ ...prev, page: prev.page - 1 }))}
-                    disabled={filters.page === 1}
-                    className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
                   >
                     Previous
                   </button>
                   
-                  {[...Array(pagination.pages)].map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setFilters(prev => ({ ...prev, page: i + 1 }))}
-                      className={`px-4 py-2 rounded-lg ${
-                        filters.page === i + 1
-                          ? 'bg-primary-600 text-white'
-                          : 'border border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {i + 1}
-                    </button>
+                  {getPaginationRange().map((page, i) => (
+                    page === '...' ? (
+                      <span key={`ellipsis-${i}`} className="px-3 py-2">...</span>
+                    ) : (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-4 py-2 rounded-lg transition-colors ${
+                          currentPage === page
+                            ? 'bg-primary-600 text-white'
+                            : 'border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    )
                   ))}
                   
                   <button
-                    onClick={() => setFilters(prev => ({ ...prev, page: prev.page + 1 }))}
-                    disabled={filters.page === pagination.pages}
-                    className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    onClick={() => setCurrentPage(prev => Math.min(pagination.pages, prev + 1))}
+                    disabled={currentPage === pagination.pages}
+                    className="px-3 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
                   >
                     Next
                   </button>

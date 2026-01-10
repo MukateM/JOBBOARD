@@ -21,6 +21,7 @@ export const Register = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting }
   } = useForm({
     resolver: zodResolver(registerSchema),
@@ -28,6 +29,8 @@ export const Register = () => {
       role: 'applicant'
     }
   });
+
+  const selectedRole = watch('role'); // ← Watch the role field
 
   const onSubmit = async (data) => {
     try {
@@ -39,6 +42,7 @@ export const Register = () => {
       }
     } catch (err) {
       setError(err.error || 'Registration failed');
+      console.error('Registration error:', err); // ← Add this for debugging
     }
   };
 
@@ -113,9 +117,9 @@ export const Register = () => {
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <label className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all ${
-                  'applicant' === 'applicant' 
+                  selectedRole === 'applicant'  // ← Fixed!
                     ? 'border-primary-500 bg-primary-50' 
-                    : 'border-gray-200'
+                    : 'border-gray-200 hover:border-gray-300'
                 }`}>
                   <input
                     {...register('role')}
@@ -123,15 +127,17 @@ export const Register = () => {
                     value="applicant"
                     className="sr-only"
                   />
-                  <User className="h-6 w-6 mb-2" />
+                  <User className={`h-6 w-6 mb-2 ${
+                    selectedRole === 'applicant' ? 'text-primary-600' : 'text-gray-400'
+                  }`} />
                   <span className="block text-sm font-medium">Find Jobs</span>
                   <span className="block text-xs text-gray-500">As an applicant</span>
                 </label>
 
                 <label className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all ${
-                  'employer' === 'employer' 
+                  selectedRole === 'employer'  // ← Fixed!
                     ? 'border-primary-500 bg-primary-50' 
-                    : 'border-gray-200'
+                    : 'border-gray-200 hover:border-gray-300'
                 }`}>
                   <input
                     {...register('role')}
@@ -139,7 +145,9 @@ export const Register = () => {
                     value="employer"
                     className="sr-only"
                   />
-                  <Building className="h-6 w-6 mb-2" />
+                  <Building className={`h-6 w-6 mb-2 ${
+                    selectedRole === 'employer' ? 'text-primary-600' : 'text-gray-400'
+                  }`} />
                   <span className="block text-sm font-medium">Hire Talent</span>
                   <span className="block text-xs text-gray-500">As an employer</span>
                 </label>
@@ -152,7 +160,7 @@ export const Register = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full btn-primary py-3"
+              className="w-full btn-primary py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Creating account...' : 'Create Account'}
             </button>
