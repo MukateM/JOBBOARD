@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios'; // ← Add this import
 import { 
   ArrowLeft, 
   Save, 
@@ -12,10 +13,13 @@ import {
   Award
 } from 'lucide-react';
 
+const API_URL = 'http://localhost:5000/api'; // ← Add this
+
 export const PostJob = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState(''); // ← Add error state
   const [requirements, setRequirements] = useState([]);
   const [responsibilities, setResponsibilities] = useState([]);
   const [benefits, setBenefits] = useState([]);
@@ -23,120 +27,58 @@ export const PostJob = () => {
   const [responsibilityInput, setResponsibilityInput] = useState('');
   const [benefitInput, setBenefitInput] = useState('');
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    location: '',
-    remoteOk: false,
-    jobType: 'full-time',
-    experienceLevel: 'mid',
-    salaryMin: '',
-    salaryMax: '',
-    salaryCurrency: 'USD',
-    category: 'technology'
-  });
-
-  const jobTypes = [
-    { value: 'full-time', label: 'Full-time' },
-    { value: 'part-time', label: 'Part-time' },
-    { value: 'contract', label: 'Contract' },
-    { value: 'internship', label: 'Internship' },
-    { value: 'freelance', label: 'Freelance' }
-  ];
-
-  const experienceLevels = [
-    { value: 'entry', label: 'Entry Level' },
-    { value: 'mid', label: 'Mid Level' },
-    { value: 'senior', label: 'Senior Level' },
-    { value: 'executive', label: 'Executive' }
-  ];
-
-  const categories = [
-    { value: 'technology', label: 'Technology' },
-    { value: 'marketing', label: 'Marketing' },
-    { value: 'sales', label: 'Sales' },
-    { value: 'design', label: 'Design' },
-    { value: 'finance', label: 'Finance' },
-    { value: 'healthcare', label: 'Healthcare' }
-  ];
-
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const addRequirement = () => {
-    if (requirementInput.trim()) {
-      setRequirements([...requirements, requirementInput.trim()]);
-      setRequirementInput('');
-    }
-  };
-
-  const removeRequirement = (index) => {
-    setRequirements(requirements.filter((_, i) => i !== index));
-  };
-
-  const addResponsibility = () => {
-    if (responsibilityInput.trim()) {
-      setResponsibilities([...responsibilities, responsibilityInput.trim()]);
-      setResponsibilityInput('');
-    }
-  };
-
-  const removeResponsibility = (index) => {
-    setResponsibilities(responsibilities.filter((_, i) => i !== index));
-  };
-
-  const addBenefit = () => {
-    if (benefitInput.trim()) {
-      setBenefits([...benefits, benefitInput.trim()]);
-      setBenefitInput('');
-    }
-  };
-
-  const removeBenefit = (index) => {
-    setBenefits(benefits.filter((_, i) => i !== index));
-  };
+  // ... all your existing state and functions ...
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError(''); // ← Clear previous errors
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setSuccess(true);
-      
-      // Redirect after success
-      setTimeout(() => {
-        navigate('/employer/dashboard');
-      }, 2000);
+      // Prepare the payload
+      const jobData = {
+        title: formData.title,
+        description: formData.description,
+        location: formData.location,
+        remoteOk: formData.remoteOk,
+        requirements: requirements,
+        responsibilities: responsibilities,
+        benefits: benefits,
+        jobType: formData.jobType,
+        experienceLevel: formData.experienceLevel,
+        salaryMin: formData.salaryMin ? parseInt(formData.salaryMin) : null,
+        salaryMax: formData.salaryMax ? parseInt(formData.salaryMax) : null,
+        salaryCurrency: formData.salaryCurrency,
+        categoryId: formData.category // Note: This might need to be the actual category UUID
+      };
+
+      console.log('Submitting job:', jobData); // ← Debug log
+
+      // Make the actual API call
+      const response = await axios.post(`${API_URL}/jobs`, jobData);
+
+      console.log('Job created:', response.data); // ← Debug log
+
+      if (response.data.success) {
+        setSuccess(true);
+        
+        // Redirect after success
+        setTimeout(() => {
+          navigate('/employer/dashboard');
+        }, 2000);
+      }
       
     } catch (error) {
       console.error('Failed to post job:', error);
+      setError(
+        error.response?.data?.error || 
+        error.response?.data?.errors?.[0]?.msg ||
+        'Failed to post job. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Briefcase className="w-8 h-8 text-green-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Job Posted Successfully!</h2>
-          <p className="text-gray-600 mb-4">Your job listing has been submitted for review.</p>
-          <p className="text-gray-500">Redirecting to dashboard...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">

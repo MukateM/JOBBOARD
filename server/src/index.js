@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const jobRoutes = require('./routes/jobs');
 
 const app = express();
 
@@ -34,6 +36,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/jobs', jobRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

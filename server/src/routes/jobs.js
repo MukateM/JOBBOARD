@@ -32,7 +32,7 @@ router.get('/', [
         companies (name, logo_url),
         job_categories (name)
       `)
-      .eq('status', 'approved')
+      .eq('status', 'active')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     
@@ -61,7 +61,7 @@ router.get('/', [
     const { count: totalCount } = await supabase
       .from('job_listings')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'approved');
+      .eq('status', 'active');
     
     res.json({
       success: true,
@@ -96,7 +96,7 @@ router.get('/:id', async (req, res) => {
         job_categories (*)
       `)
       .eq('id', id)
-      .eq('status', 'approved')
+      .eq('status', 'active')
       .single();
     
     if (error) {
@@ -194,7 +194,7 @@ router.post('/',
           salary_min: salaryMin,
           salary_max: salaryMax,
           salary_currency: salaryCurrency,
-          category_id: categoryId,
+          category_id: categoryId || null, 
           status: 'pending'
         }])
         .select()

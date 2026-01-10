@@ -1,6 +1,5 @@
-const bcrypt = require('bcryptjs');
+const { supabase } = require('../config/database');
 const jwt = require('jsonwebtoken');
-const { pool } = require('../config/database');
 
 // Generate JWT token
 const generateToken = (userId, role) => {
@@ -13,8 +12,6 @@ const generateToken = (userId, role) => {
 
 // Register new user
 const register = async (req, res) => {
-  const client = await pool.connect();
-  
   try {
     const { email, password, fullName, role } = req.body;
 
@@ -35,78 +32,99 @@ const register = async (req, res) => {
       });
     }
 
-    await client.query('BEGIN');
+    // Create user with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: email.toLowerCase(),
+      password: password,
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        full_name: fullName,
+        role: role
+      }
+    });
 
-    // Check if user already exists
-    const existingUser = await client.query(
-      'SELECT id FROM users WHERE email = $1',
-      [email.toLowerCase()]
-    );
-
-    if (existingUser.rows.length > 0) {
-      await client.query('ROLLBACK');
+    if (authError) {
+      console.error('❌ Supabase auth error:', authError);
       return res.status(400).json({
         success: false,
-        error: 'Email already registered'
+        error: authError.message || 'Failed to create user'
       });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Create profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .insert([{
+        id: authData.user.id,
+        email: email.toLowerCase(),
+        full_name: fullName,
+        role: role,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }])
+      .select()
+      .single();
 
-    // Insert user
-    const userResult = await client.query(
-      `INSERT INTO users (email, password_hash, full_name, role, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
-       RETURNING id, email, full_name, role, created_at`,
-      [email.toLowerCase(), hashedPassword, fullName, role]
-    );
-
-    const user = userResult.rows[0];
-
-    // Create role-specific profile
-    if (role === 'applicant') {
-      await client.query(
-        `INSERT INTO applicants (user_id, created_at, updated_at)
-         VALUES ($1, NOW(), NOW())`,
-        [user.id]
-      );
-    } else if (role === 'employer') {
-      await client.query(
-        `INSERT INTO companies (user_id, name, created_at, updated_at)
-         VALUES ($1, $2, NOW(), NOW())`,
-        [user.id, fullName]
-      );
+    if (profileError) {
+      console.error('❌ Profile creation error:', profileError);
+      // Cleanup: delete the auth user if profile creation fails
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to create profile'
+      });
     }
 
-    await client.query('COMMIT');
+    // If employer, create company placeholder
+    // If employer, create company placeholder
+if (role === 'employer') {
+  const { data: company, error: companyError } = await supabase
+    .from('companies')
+    .insert([{
+      user_id: user.id,
+      name: fullName,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }])
+    .select()
+    .single();
 
-    // Generate token
-    const token = generateToken(user.id, user.role);
+  if (companyError) {
+    console.error('❌ Company creation error:', companyError);
+  } else {
+    // Update profile with company_id
+    await supabase
+      .from('profiles')
+      .update({ company_id: company.id })
+      .eq('id', user.id);
+    
+    console.log('✅ Company created and linked to profile');
+  }
+}
 
-    console.log('✅ User registered successfully:', user.email);
+    // Generate our own JWT token for the app
+    const token = generateToken(profile.id, profile.role);
+
+    console.log('✅ User registered successfully:', profile.email);
 
     res.status(201).json({
       success: true,
       token,
       user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.full_name,
-        role: user.role,
-        createdAt: user.created_at
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.full_name,
+        role: profile.role,
+        createdAt: profile.created_at
       }
     });
 
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('❌ Registration error:', error);
     res.status(500).json({
       success: false,
       error: 'Server error during registration'
     });
-  } finally {
-    client.release();
   }
 };
 
@@ -124,45 +142,49 @@ const login = async (req, res) => {
       });
     }
 
-    // Get user
-    const result = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email.toLowerCase()]
-    );
+    // Sign in with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase(),
+      password: password
+    });
 
-    if (result.rows.length === 0) {
+    if (authError) {
+      console.error('❌ Auth error:', authError);
       return res.status(401).json({
         success: false,
         error: 'Invalid credentials'
       });
     }
 
-    const user = result.rows[0];
+    // Get user profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
 
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
-
-    if (!isValidPassword) {
-      return res.status(401).json({
+    if (profileError || !profile) {
+      console.error('❌ Profile not found:', profileError);
+      return res.status(404).json({
         success: false,
-        error: 'Invalid credentials'
+        error: 'Profile not found'
       });
     }
 
-    // Generate token
-    const token = generateToken(user.id, user.role);
+    // Generate our own JWT token
+    const token = generateToken(profile.id, profile.role);
 
-    console.log('✅ Login successful:', user.email);
+    console.log('✅ Login successful:', profile.email);
 
     res.json({
       success: true,
       token,
       user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.full_name,
-        role: user.role,
-        createdAt: user.created_at
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.full_name,
+        role: profile.role,
+        createdAt: profile.created_at
       }
     });
 
@@ -178,28 +200,29 @@ const login = async (req, res) => {
 // Get current user
 const getMe = async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT id, email, full_name, role, created_at FROM users WHERE id = $1',
-      [req.user.userId]
-    );
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', req.user.userId)
+      .single();
 
-    if (result.rows.length === 0) {
+    if (error || !profile) {
       return res.status(404).json({
         success: false,
         error: 'User not found'
       });
     }
 
-    const user = result.rows[0];
-
     res.json({
       success: true,
       user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.full_name,
-        role: user.role,
-        createdAt: user.created_at
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.full_name,
+        role: profile.role,
+        phone: profile.phone,
+        companyId: profile.company_id,
+        createdAt: profile.created_at
       }
     });
 
@@ -215,50 +238,45 @@ const getMe = async (req, res) => {
 // Update profile
 const updateProfile = async (req, res) => {
   try {
-    const { fullName, email } = req.body;
-    const updates = [];
-    const values = [];
-    let paramCount = 1;
+    const { fullName, phone } = req.body;
+    const updates = {
+      updated_at: new Date().toISOString()
+    };
 
-    if (fullName) {
-      updates.push(`full_name = $${paramCount}`);
-      values.push(fullName);
-      paramCount++;
-    }
+    if (fullName) updates.full_name = fullName;
+    if (phone) updates.phone = phone;
 
-    if (email) {
-      updates.push(`email = $${paramCount}`);
-      values.push(email.toLowerCase());
-      paramCount++;
-    }
-
-    if (updates.length === 0) {
+    if (Object.keys(updates).length === 1) {
       return res.status(400).json({
         success: false,
         error: 'No updates provided'
       });
     }
 
-    updates.push(`updated_at = NOW()`);
-    values.push(req.user.userId);
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', req.user.userId)
+      .select()
+      .single();
 
-    const query = `
-      UPDATE users 
-      SET ${updates.join(', ')}
-      WHERE id = $${paramCount}
-      RETURNING id, email, full_name, role, created_at
-    `;
-
-    const result = await pool.query(query, values);
+    if (error) {
+      console.error('❌ Update error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to update profile'
+      });
+    }
 
     res.json({
       success: true,
       user: {
-        id: result.rows[0].id,
-        email: result.rows[0].email,
-        fullName: result.rows[0].full_name,
-        role: result.rows[0].role,
-        createdAt: result.rows[0].created_at
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.full_name,
+        role: profile.role,
+        phone: profile.phone,
+        createdAt: profile.created_at
       }
     });
 
