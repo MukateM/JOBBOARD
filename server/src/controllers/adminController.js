@@ -50,7 +50,7 @@ const approveJob = async (req, res) => {
     const { data: job, error } = await supabase
       .from('job_listings')
       .update({
-        status: 'active',
+        status: 'approved',
         published_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })

@@ -32,7 +32,7 @@ router.get('/', [
         companies (name, logo_url),
         job_categories (name)
       `)
-      .eq('status', 'active')
+      .eq('status', 'approved')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
     
@@ -61,7 +61,7 @@ router.get('/', [
     const { count: totalCount } = await supabase
       .from('job_listings')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'active');
+      .eq('status', 'approved');
     
     res.json({
       success: true,
@@ -83,7 +83,74 @@ router.get('/', [
   }
 });
 
-// Get single job
+// IMPORTANT: Specific routes like /employer/mine MUST come before /:id
+// Get employer's jobs
+router.get('/employer/mine',
+  authenticate,
+  authorize('employer'),
+  async (req, res) => {
+    try {
+      console.log('[EMPLOYER/MINE] User ID:', req.user?.userId);
+      console.log('[EMPLOYER/MINE] User object:', req.user);
+
+      if (!req.user?.userId) {
+        return res.status(401).json({
+          success: false,
+          error: 'User ID missing from token'
+        });
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', req.user.userId)
+        .single();
+
+      if (profileError) {
+        console.error('[EMPLOYER/MINE] Profile error:', profileError);
+        throw profileError;
+      }
+
+      if (!profile || !profile.company_id) {
+        console.log('[EMPLOYER/MINE] No company_id found for user', req.user.userId);
+        return res.status(200).json({
+          success: true,
+          jobs: [],
+          message: 'No company registered yet. Please register your company first.'
+        });
+      }
+
+      const { data: jobs, error: jobsError } = await supabase
+        .from('job_listings')
+        .select(`
+          *,
+          companies (*)
+        `)
+        .eq('company_id', profile.company_id)
+        .order('created_at', { ascending: false });
+
+      if (jobsError) {
+        console.error('[EMPLOYER/MINE] Jobs query error:', jobsError);
+        throw jobsError;
+      }
+
+      res.json({
+        success: true,
+        jobs: jobs || []
+      });
+
+    } catch (error) {
+      console.error('[EMPLOYER/MINE] Full error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch employer jobs',
+        details: error.message
+      });
+    }
+  }
+);
+
+// Get single job - MUST come after /employer/mine
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -96,7 +163,7 @@ router.get('/:id', async (req, res) => {
         job_categories (*)
       `)
       .eq('id', id)
-      .eq('status', 'active')
+      .eq('status', 'approved')
       .single();
     
     if (error) {
@@ -168,7 +235,7 @@ router.post('/',
       const { data: profile } = await supabase
         .from('profiles')
         .select('company_id')
-        .eq('id', req.user.id)
+        .eq('id', req.user.userId)
         .single();
       
       if (!profile?.company_id) {
@@ -176,6 +243,27 @@ router.post('/',
           success: false,
           error: 'You need to register a company first'
         });
+      }
+
+      // Handle category - if it's not a UUID, look it up by slug/name
+      let finalCategoryId = null;
+      if (categoryId) {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId);
+        
+        if (isUUID) {
+          finalCategoryId = categoryId;
+        } else {
+          // Look up category by slug or name
+          const { data: category } = await supabase
+            .from('job_categories')
+            .select('id')
+            .or(`slug.eq.${categoryId},name.ilike.${categoryId}`)
+            .single();
+          
+          if (category) {
+            finalCategoryId = category.id;
+          }
+        }
       }
       
       const { data: job, error } = await supabase
@@ -194,7 +282,7 @@ router.post('/',
           salary_min: salaryMin,
           salary_max: salaryMax,
           salary_currency: salaryCurrency,
-          category_id: categoryId || null, 
+          category_id: finalCategoryId,
           status: 'pending'
         }])
         .select()
@@ -249,7 +337,7 @@ router.put('/:id',
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, company_id')
-        .eq('id', req.user.id)
+        .eq('id', req.user.userId)
         .single();
       
       const isOwner = profile.company_id === job.company_id;
@@ -292,45 +380,6 @@ router.put('/:id',
       res.status(500).json({
         success: false,
         error: 'Failed to update job'
-      });
-    }
-  }
-);
-
-// Get employer's jobs
-router.get('/employer/mine',
-  authenticate,
-  authorize('employer'),
-  async (req, res) => {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('company_id')
-        .eq('id', req.user.id)
-        .single();
-      
-      const { data: jobs, error } = await supabase
-        .from('job_listings')
-        .select(`
-          *,
-          companies (*),
-          applications (count)
-        `)
-        .eq('company_id', profile.company_id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      res.json({
-        success: true,
-        jobs
-      });
-      
-    } catch (error) {
-      console.error('Get employer jobs error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to fetch jobs'
       });
     }
   }

@@ -1,25 +1,35 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios'; // ← Add this import
+import axios from 'axios';
 import { 
   ArrowLeft, 
   Save, 
   Plus, 
   X,
-  Briefcase,
-  MapPin,
-  DollarSign,
-  Type,
-  Award
+  Briefcase
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api'; // ← Add this
+const API_URL = 'http://localhost:5000/api';
 
 export const PostJob = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState(''); // ← Add error state
+  const [error, setError] = useState('');
+  
+  // Form data state
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    location: '',
+    remoteOk: false,
+    jobType: 'full-time',
+    experienceLevel: 'mid',
+    salaryMin: '',
+    salaryMax: '',
+    salaryCurrency: 'USD',
+    category: ''
+  });
+
   const [requirements, setRequirements] = useState([]);
   const [responsibilities, setResponsibilities] = useState([]);
   const [benefits, setBenefits] = useState([]);
@@ -27,15 +37,81 @@ export const PostJob = () => {
   const [responsibilityInput, setResponsibilityInput] = useState('');
   const [benefitInput, setBenefitInput] = useState('');
 
-  // ... all your existing state and functions ...
+  const jobTypes = [
+    { value: 'full-time', label: 'Full Time' },
+    { value: 'part-time', label: 'Part Time' },
+    { value: 'contract', label: 'Contract' },
+    { value: 'internship', label: 'Internship' }
+  ];
+
+  const experienceLevels = [
+    { value: 'entry', label: 'Entry Level' },
+    { value: 'mid', label: 'Mid Level' },
+    { value: 'senior', label: 'Senior Level' },
+    { value: 'executive', label: 'Executive' }
+  ];
+
+  const categories = [
+    { value: '', label: 'Select a category' },
+    { value: 'engineering', label: 'Engineering' },
+    { value: 'design', label: 'Design' },
+    { value: 'product', label: 'Product' },
+    { value: 'marketing', label: 'Marketing' },
+    { value: 'sales', label: 'Sales' },
+    { value: 'customer-support', label: 'Customer Support' },
+    { value: 'operations', label: 'Operations' },
+    { value: 'finance', label: 'Finance' },
+    { value: 'hr', label: 'Human Resources' },
+    { value: 'other', label: 'Other' }
+  ];
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const addRequirement = () => {
+    if (requirementInput.trim()) {
+      setRequirements([...requirements, requirementInput.trim()]);
+      setRequirementInput('');
+    }
+  };
+
+  const removeRequirement = (index) => {
+    setRequirements(requirements.filter((_, i) => i !== index));
+  };
+
+  const addResponsibility = () => {
+    if (responsibilityInput.trim()) {
+      setResponsibilities([...responsibilities, responsibilityInput.trim()]);
+      setResponsibilityInput('');
+    }
+  };
+
+  const removeResponsibility = (index) => {
+    setResponsibilities(responsibilities.filter((_, i) => i !== index));
+  };
+
+  const addBenefit = () => {
+    if (benefitInput.trim()) {
+      setBenefits([...benefits, benefitInput.trim()]);
+      setBenefitInput('');
+    }
+  };
+
+  const removeBenefit = (index) => {
+    setBenefits(benefits.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError(''); // ← Clear previous errors
+    setError('');
 
     try {
-      // Prepare the payload
       const jobData = {
         title: formData.title,
         description: formData.description,
@@ -49,23 +125,19 @@ export const PostJob = () => {
         salaryMin: formData.salaryMin ? parseInt(formData.salaryMin) : null,
         salaryMax: formData.salaryMax ? parseInt(formData.salaryMax) : null,
         salaryCurrency: formData.salaryCurrency,
-        categoryId: formData.category // Note: This might need to be the actual category UUID
+        categoryId: formData.category || null
       };
 
-      console.log('Submitting job:', jobData); // ← Debug log
-
-      // Make the actual API call
-      const response = await axios.post(`${API_URL}/jobs`, jobData);
-
-      console.log('Job created:', response.data); // ← Debug log
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_URL}/jobs`, jobData, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
 
       if (response.data.success) {
-        setSuccess(true);
-        
-        // Redirect after success
-        setTimeout(() => {
-          navigate('/employer/dashboard');
-        }, 2000);
+        alert('Job posted successfully! It will be reviewed by admin before going live.');
+        navigate('/employer/dashboard');
       }
       
     } catch (error) {
@@ -102,6 +174,12 @@ export const PostJob = () => {
             </div>
           </div>
 
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* Basic Information */}
             <div className="border-b pb-8">
@@ -117,7 +195,7 @@ export const PostJob = () => {
                     name="title"
                     value={formData.title}
                     onChange={handleInputChange}
-                    className="input-field"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="e.g., Senior Frontend Developer"
                     required
                   />
@@ -131,7 +209,7 @@ export const PostJob = () => {
                     name="jobType"
                     value={formData.jobType}
                     onChange={handleInputChange}
-                    className="input-field"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     required
                   >
                     {jobTypes.map(type => (
@@ -151,7 +229,7 @@ export const PostJob = () => {
                     name="location"
                     value={formData.location}
                     onChange={handleInputChange}
-                    className="input-field"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="e.g., New York, NY or Remote"
                     required
                   />
@@ -165,7 +243,7 @@ export const PostJob = () => {
                     name="experienceLevel"
                     value={formData.experienceLevel}
                     onChange={handleInputChange}
-                    className="input-field"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     required
                   >
                     {experienceLevels.map(level => (
@@ -204,7 +282,7 @@ export const PostJob = () => {
                   value={formData.description}
                   onChange={handleInputChange}
                   rows="8"
-                  className="input-field"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Describe the role, responsibilities, and what makes this job special..."
                   required
                 />
@@ -225,7 +303,7 @@ export const PostJob = () => {
                     value={requirementInput}
                     onChange={(e) => setRequirementInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRequirement())}
-                    className="input-field"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="e.g., 5+ years of React experience"
                   />
                   <button
@@ -256,6 +334,96 @@ export const PostJob = () => {
               )}
             </div>
 
+            {/* Responsibilities */}
+            <div className="border-b pb-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Responsibilities</h2>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Add Responsibilities
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={responsibilityInput}
+                    onChange={(e) => setResponsibilityInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addResponsibility())}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., Lead frontend architecture decisions"
+                  />
+                  <button
+                    type="button"
+                    onClick={addResponsibility}
+                    className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {responsibilities.length > 0 && (
+                <div className="space-y-2">
+                  {responsibilities.map((resp, index) => (
+                    <div key={index} className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-lg">
+                      <span className="text-gray-700">{resp}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeResponsibility(index)}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Benefits */}
+            <div className="border-b pb-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Benefits</h2>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Add Benefits
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={benefitInput}
+                    onChange={(e) => setBenefitInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addBenefit())}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="e.g., Health insurance, 401k matching"
+                  />
+                  <button
+                    type="button"
+                    onClick={addBenefit}
+                    className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {benefits.length > 0 && (
+                <div className="space-y-2">
+                  {benefits.map((benefit, index) => (
+                    <div key={index} className="flex items-center justify-between bg-gray-50 px-4 py-2 rounded-lg">
+                      <span className="text-gray-700">{benefit}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeBenefit(index)}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Salary */}
             <div className="border-b pb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-6">Salary Information</h2>
@@ -269,11 +437,12 @@ export const PostJob = () => {
                     name="salaryCurrency"
                     value={formData.salaryCurrency}
                     onChange={handleInputChange}
-                    className="input-field"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="USD">USD ($)</option>
                     <option value="EUR">EUR (€)</option>
                     <option value="GBP">GBP (£)</option>
+                    <option value="ZMW">ZMW (K)</option>
                   </select>
                 </div>
 
@@ -286,7 +455,7 @@ export const PostJob = () => {
                     name="salaryMin"
                     value={formData.salaryMin}
                     onChange={handleInputChange}
-                    className="input-field"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="e.g., 80000"
                     min="0"
                   />
@@ -301,7 +470,7 @@ export const PostJob = () => {
                     name="salaryMax"
                     value={formData.salaryMax}
                     onChange={handleInputChange}
-                    className="input-field"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                     placeholder="e.g., 120000"
                     min="0"
                   />
@@ -315,14 +484,13 @@ export const PostJob = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Category *
+                  Select Category
                 </label>
                 <select
                   name="category"
                   value={formData.category}
                   onChange={handleInputChange}
-                  className="input-field"
-                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   {categories.map(cat => (
                     <option key={cat.value} value={cat.value}>

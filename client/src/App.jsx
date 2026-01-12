@@ -16,6 +16,7 @@ import { Profile } from './pages/Profile';
 // Employer Pages
 import { EmployerDashboard } from './pages/employer/Dashboard';
 import { PostJob } from './pages/employer/PostJob';
+import { CompanySetup } from './pages/employer/CompanySetup';
 
 // Applicant Pages
 import { MyApplications } from './pages/applicant/Applications';
@@ -55,6 +56,7 @@ function App() {
                   <EmployerDashboard />
                 </ProtectedRoute>
               } />
+                <Route path="/employer/company-setup" element={<CompanySetup />} />
               <Route path="/employer/post-job" element={
                 <ProtectedRoute roles={['employer']}>
                   <PostJob />

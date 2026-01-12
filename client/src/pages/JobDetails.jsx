@@ -13,6 +13,7 @@ import {
   Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 export const JobDetails = () => {
   const { id } = useParams();
@@ -20,62 +21,29 @@ export const JobDetails = () => {
   const { isAuthenticated, user } = useAuth();
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [applied, setApplied] = useState(false);
 
-  // Mock job data for development
-  const mockJob = {
-    id,
-    title: 'Senior Frontend Developer',
-    company: {
-      name: 'Tech Innovations Inc.',
-      logo: 'https://via.placeholder.com/100',
-      description: 'Leading technology company specializing in web applications.'
-    },
-    description: `We are looking for an experienced Senior Frontend Developer to join our growing team. You will be responsible for building modern, responsive web applications using React and TypeScript.
-
-## Responsibilities:
-- Develop new user-facing features
-- Build reusable components and front-end libraries
-- Optimize applications for maximum performance
-- Collaborate with back-end developers and designers
-- Implement responsive design
-
-## Requirements:
-- 5+ years of experience with React
-- Strong knowledge of TypeScript
-- Experience with state management (Redux/Context)
-- Familiarity with modern front-end build pipelines
-- Excellent problem-solving skills`,
-    location: 'Remote (Global)',
-    remoteOk: true,
-    jobType: 'Full-time',
-    experienceLevel: 'Senior',
-    salaryMin: 120000,
-    salaryMax: 180000,
-    salaryCurrency: 'USD',
-    requirements: [
-      '5+ years of professional experience',
-      'Strong proficiency in React and TypeScript',
-      'Experience with modern front-end tools',
-      'Excellent communication skills'
-    ],
-    benefits: [
-      'Competitive salary',
-      'Health insurance',
-      'Remote work options',
-      'Flexible hours',
-      'Professional development budget'
-    ],
-    postedDate: '2024-01-15',
-    applications: 24
-  };
-
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setJob(mockJob);
-      setLoading(false);
-    }, 500);
+    const fetchJob = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get(`/jobs/${id}`);
+        
+        if (response.data.success) {
+          setJob(response.data.job);
+        } else {
+          setError('Job not found');
+        }
+      } catch (err) {
+        console.error('Failed to fetch job:', err);
+        setError(err.response?.data?.error || 'Failed to load job details');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJob();
   }, [id]);
 
   const handleApply = () => {
@@ -87,14 +55,42 @@ export const JobDetails = () => {
   };
 
   const formatSalary = () => {
-    if (!job.salaryMin && !job.salaryMax) return 'Negotiable';
-    return `${job.salaryCurrency} ${job.salaryMin?.toLocaleString()} - ${job.salaryMax?.toLocaleString()}`;
+    if (!job?.salary_min && !job?.salary_max) return 'Negotiable';
+    const min = job.salary_min?.toLocaleString();
+    const max = job.salary_max?.toLocaleString();
+    return `K ${min} - ${max}`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Recently';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (error || !job) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Job Not Found</h2>
+          <p className="text-gray-600 mb-6">{error || 'The job you are looking for does not exist.'}</p>
+          <button
+            onClick={() => navigate('/jobs')}
+            className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700"
+          >
+            Browse Jobs
+          </button>
+        </div>
       </div>
     );
   }
@@ -118,12 +114,12 @@ export const JobDetails = () => {
               <div className="flex items-center space-x-4">
                 <div className="flex items-center text-gray-600">
                   <Building className="h-5 w-5 mr-2" />
-                  <span className="font-medium">{job.company.name}</span>
+                  <span className="font-medium">{job.companies?.name || 'Company'}</span>
                 </div>
                 <div className="flex items-center text-gray-600">
                   <MapPin className="h-5 w-5 mr-2" />
                   <span>{job.location}</span>
-                  {job.remoteOk && (
+                  {job.remote_ok && (
                     <span className="ml-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
                       Remote
                     </span>
@@ -168,17 +164,34 @@ export const JobDetails = () => {
             </div>
 
             {/* Requirements */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-semibold mb-4">Requirements</h2>
-              <ul className="space-y-3">
-                {job.requirements.map((req, index) => (
-                  <li key={index} className="flex items-start">
-                    <CheckCircle className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                    <span className="text-gray-700">{req}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {job.requirements && job.requirements.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 className="text-xl font-semibold mb-4">Requirements</h2>
+                <ul className="space-y-3">
+                  {job.requirements.map((req, index) => (
+                    <li key={index} className="flex items-start">
+                      <CheckCircle className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-700">{req}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Responsibilities */}
+            {job.responsibilities && job.responsibilities.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h2 className="text-xl font-semibold mb-4">Responsibilities</h2>
+                <ul className="space-y-3">
+                  {job.responsibilities.map((resp, index) => (
+                    <li key={index} className="flex items-start">
+                      <CheckCircle className="h-5 w-5 text-blue-500 mr-3 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-700">{resp}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -191,23 +204,25 @@ export const JobDetails = () => {
                   <Briefcase className="h-5 w-5 text-gray-400 mr-3" />
                   <div>
                     <p className="text-sm text-gray-500">Job Type</p>
-                    <p className="font-medium">{job.jobType}</p>
+                    <p className="font-medium capitalize">{job.job_type?.replace('-', ' ')}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center">
-                  <DollarSign className="h-5 w-5 text-gray-400 mr-3" />
-                  <div>
-                    <p className="text-sm text-gray-500">Salary</p>
-                    <p className="font-medium">{formatSalary()}</p>
+                {(job.salary_min || job.salary_max) && (
+                  <div className="flex items-center">
+                    <DollarSign className="h-5 w-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="text-sm text-gray-500">Salary</p>
+                      <p className="font-medium">{formatSalary()}</p>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex items-center">
                   <Users className="h-5 w-5 text-gray-400 mr-3" />
                   <div>
                     <p className="text-sm text-gray-500">Experience Level</p>
-                    <p className="font-medium">{job.experienceLevel}</p>
+                    <p className="font-medium capitalize">{job.experience_level}</p>
                   </div>
                 </div>
 
@@ -215,49 +230,72 @@ export const JobDetails = () => {
                   <Calendar className="h-5 w-5 text-gray-400 mr-3" />
                   <div>
                     <p className="text-sm text-gray-500">Posted</p>
-                    <p className="font-medium">{new Date(job.postedDate).toLocaleDateString()}</p>
+                    <p className="font-medium">{formatDate(job.published_at || job.created_at)}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center">
-                  <Users className="h-5 w-5 text-gray-400 mr-3" />
-                  <div>
-                    <p className="text-sm text-gray-500">Applications</p>
-                    <p className="font-medium">{job.applications} applicants</p>
+                {job.remote_ok && (
+                  <div className="flex items-center">
+                    <Globe className="h-5 w-5 text-gray-400 mr-3" />
+                    <div>
+                      <p className="text-sm text-gray-500">Work Type</p>
+                      <p className="font-medium">Remote Friendly</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
             {/* Benefits Card */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-lg font-semibold mb-4">Benefits</h3>
-              <ul className="space-y-2">
-                {job.benefits.map((benefit, index) => (
-                  <li key={index} className="flex items-center">
-                    <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                    <span className="text-gray-700">{benefit}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {job.benefits && job.benefits.length > 0 && (
+              <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h3 className="text-lg font-semibold mb-4">Benefits</h3>
+                <ul className="space-y-2">
+                  {job.benefits.map((benefit, index) => (
+                    <li key={index} className="flex items-center">
+                      <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                      <span className="text-gray-700">{benefit}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Company Card */}
-            <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-              <h3 className="text-lg font-semibold mb-4">About the Company</h3>
-              <div className="flex items-start mb-4">
-                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center mr-4">
-                  <Building className="h-6 w-6 text-gray-600" />
-                </div>
-                <div>
-                  <h4 className="font-semibold">{job.company.name}</h4>
-                  <p className="text-sm text-gray-600">{job.company.description}</p>
+            {job.companies && (
+              <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+                <h3 className="text-lg font-semibold mb-4">About the Company</h3>
+                <div className="flex items-start mb-4">
+                  {job.companies.logo_url ? (
+                    <img 
+                      src={job.companies.logo_url} 
+                      alt={job.companies.name}
+                      className="w-12 h-12 rounded-lg mr-4 object-cover"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center mr-4">
+                      <Building className="h-6 w-6 text-gray-600" />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="font-semibold">{job.companies.name}</h4>
+                    {job.companies.description && (
+                      <p className="text-sm text-gray-600 mt-1">{job.companies.description}</p>
+                    )}
+                    {job.companies.website && (
+                      <a 
+                        href={job.companies.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary-600 hover:text-primary-700 mt-2 inline-block"
+                      >
+                        Visit Website →
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
-              <button className="w-full text-center text-primary-600 hover:text-primary-700 font-medium">
-                View Company Profile →
-              </button>
-            </div>
+            )}
           </div>
         </div>
 
