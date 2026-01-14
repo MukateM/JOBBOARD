@@ -1,3 +1,4 @@
+// server/src/routes/jobs.js
 const express = require('express');
 const router = express.Router();
 const { body, validationResult, query } = require('express-validator');
@@ -84,14 +85,13 @@ router.get('/', [
 });
 
 // IMPORTANT: Specific routes like /employer/mine MUST come before /:id
-// Get employer's jobs
+// Get employer's jobs WITH APPLICATIONS
 router.get('/employer/mine',
   authenticate,
   authorize('employer'),
   async (req, res) => {
     try {
       console.log('[EMPLOYER/MINE] User ID:', req.user?.userId);
-      console.log('[EMPLOYER/MINE] User object:', req.user);
 
       if (!req.user?.userId) {
         return res.status(401).json({
@@ -120,11 +120,18 @@ router.get('/employer/mine',
         });
       }
 
+      // ✅ FIXED: Include applications in the query
       const { data: jobs, error: jobsError } = await supabase
         .from('job_listings')
         .select(`
           *,
-          companies (*)
+          companies (*),
+          applications (
+            id,
+            status,
+            submitted_at,
+            user_id
+          )
         `)
         .eq('company_id', profile.company_id)
         .order('created_at', { ascending: false });

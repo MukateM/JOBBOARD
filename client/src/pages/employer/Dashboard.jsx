@@ -23,7 +23,7 @@ export const EmployerDashboard = () => {
   });
 
   const [recentJobs, setRecentJobs] = useState([]);
-  const [notification, setNotification] = useState(''); // Added for backend messages
+  const [notification, setNotification] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -36,7 +36,6 @@ export const EmployerDashboard = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
       
-      // Fetch employer's jobs
       const response = await axios.get(`${API_URL}/jobs/employer/mine`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -46,9 +45,8 @@ export const EmployerDashboard = () => {
       if (response.data.success) {
         const jobs = response.data.jobs || [];
         setRecentJobs(jobs.slice(0, 4));
-        setNotification(response.data.message || ''); // Capture any message from backend
+        setNotification(response.data.message || '');
 
-        // Calculate stats
         const totalJobs = jobs.length;
         const activeJobs = jobs.filter(j => j.status === 'approved').length;
         const pendingJobs = jobs.filter(j => j.status === 'pending').length;
@@ -272,12 +270,23 @@ export const EmployerDashboard = () => {
                       <span className="text-sm text-gray-500">
                         Posted {new Date(job.created_at).toLocaleDateString()}
                       </span>
-                      <Link 
-                        to={`/jobs/${job.id}`}
-                        className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                      >
-                        View Details →
-                      </Link>
+                      <div className="flex gap-2">
+                        {job.applications?.length > 0 && (
+                          <Link 
+                            to={`/employer/jobs/${job.id}/applications`}
+                            className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center"
+                          >
+                            <Users className="h-4 w-4 mr-1" />
+                            View Applications
+                          </Link>
+                        )}
+                        <Link 
+                          to={`/jobs/${job.id}`}
+                          className="text-gray-600 hover:text-gray-700 text-sm font-medium"
+                        >
+                          View Job →
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 ))}
