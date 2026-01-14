@@ -53,7 +53,7 @@ export const Navbar = () => {
                   </Link>
                 )}
                 
-                {/* Dashboard link - different for each role */}
+                {/* Dashboard link - for each role */}
                 <Link 
                   to={getDashboardRoute()} 
                   className="flex items-center space-x-1 text-gray-700 hover:text-primary-600 transition-colors"

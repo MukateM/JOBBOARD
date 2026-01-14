@@ -2,10 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
-const adminRoutes = require('./routes/adminRoutes');
+const adminRoutes = require('./routes/admin');
 const jobRoutes = require('./routes/jobs');
 const companiesRouter = require('./routes/companies');
 const profilesRouter = require('./routes/profiles');
+const applicationsRouter = require('./routes/applications');
 
 const app = express();
 
@@ -42,6 +43,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/companies', companiesRouter);
 app.use('/api/profiles', profilesRouter);
+app.use('/api/applications', applicationsRouter);
+app.use('/api/applications', applicationsRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

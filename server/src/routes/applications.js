@@ -1,36 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { body, validationResult } = require('express-validator');
 const { supabase } = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
-const PDFDocument = require('pdfkit');
-const { sendEmail } = require('../config/email');
 
-// Submit application
+// Submit application (applicant only)
 router.post('/',
   authenticate,
   authorize('applicant'),
-  [
-    body('jobId').notEmpty(),
-    body('email').isEmail(),
-    body('phone').notEmpty(),
-    body('experienceYears').isInt({ min: 0 }),
-    body('qualifications').isArray(),
-    body('skills').isArray(),
-    body('coverLetter').notEmpty().trim()
-  ],
   async (req, res) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({
-          success: false,
-          errors: errors.array()
-        });
-      }
-      
-      const {
-        jobId,
+      const { 
+        jobId, 
         email,
         phone,
         experienceYears,
@@ -41,107 +21,72 @@ router.post('/',
         portfolioUrl
       } = req.body;
       
-      // Check if job exists and is approved
-      const { data: job, error: jobError } = await supabase
-        .from('job_listings')
-        .select('id, title, company_id, companies(name)')
-        .eq('id', jobId)
-        .eq('status', 'approved')
-        .single();
-      
-      if (jobError || !job) {
-        return res.status(404).json({
+      if (!jobId) {
+        return res.status(400).json({
           success: false,
-          error: 'Job not found or not approved'
+          error: 'Job ID is required'
         });
       }
-      
+
       // Check if already applied
-      const { data: existingApp } = await supabase
+      const { data: existing } = await supabase
         .from('applications')
         .select('id')
         .eq('job_id', jobId)
-        .eq('applicant_id', req.user.id)
+        .eq('user_id', req.user.userId)
         .single();
-      
-      if (existingApp) {
+
+      if (existing) {
         return res.status(400).json({
           success: false,
-          error: 'You have already applied for this job'
+          error: 'You have already applied to this job'
         });
       }
-      
-      // Calculate AI score (simplified)
-      const aiScore = calculateAIScore(job, {
-        experienceYears,
-        skills,
-        qualifications
-      });
-      
+
       // Create application
-      const { data: application, error: appError } = await supabase
+      const { data: application, error } = await supabase
         .from('applications')
         .insert([{
           job_id: jobId,
-          applicant_id: req.user.id,
+          user_id: req.user.userId,
           email,
           phone,
           experience_years: experienceYears,
-          qualifications,
-          skills,
+          qualifications: qualifications || [],
+          skills: skills || [],
           cover_letter: coverLetter,
-          linkedin_url: linkedinUrl,
-          portfolio_url: portfolioUrl,
-          ai_score: aiScore
+          linkedin_url: linkedinUrl || null,
+          portfolio_url: portfolioUrl || null,
+          status: 'pending',
+          submitted_at: new Date().toISOString()
         }])
         .select()
         .single();
-      
-      if (appError) throw appError;
-      
-      // Notify employer
-      const employerNotification = `
-        <h1>New Application Received</h1>
-        <p>You have received a new application for the position: <strong>${job.title}</strong></p>
-        <p>Applicant: ${req.user.full_name}</p>
-        <p>AI Match Score: ${aiScore}%</p>
-        <p>Login to your dashboard to review the application.</p>
-      `;
-      
-      // Get employer email
-      const { data: company } = await supabase
-        .from('companies')
-        .select('contact_email')
-        .eq('id', job.company_id)
-        .single();
-      
-      if (company?.contact_email) {
-        await sendEmail(
-          company.contact_email,
-          `New Application: ${job.title}`,
-          employerNotification
-        );
+
+      if (error) {
+        console.error('Create application error:', error);
+        throw error;
       }
-      
+
       res.status(201).json({
         success: true,
         message: 'Application submitted successfully',
-        application,
-        aiScore
+        application
       });
-      
+
     } catch (error) {
       console.error('Submit application error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to submit application'
+        error: 'Failed to submit application',
+        details: error.message
       });
     }
   }
 );
 
-// Get user's applications
-router.get('/my-applications',
+// Get user's applications (applicant only)
+router.get('/me',
   authenticate,
   authorize('applicant'),
   async (req, res) => {
@@ -151,77 +96,201 @@ router.get('/my-applications',
         .select(`
           *,
           job_listings (
+            id,
             title,
-            companies (name),
-            location
+            location,
+            job_type,
+            companies (
+              name,
+              logo_url
+            )
           )
         `)
-        .eq('applicant_id', req.user.id)
+        .eq('user_id', req.user.userId)
         .order('submitted_at', { ascending: false });
-      
-      if (error) throw error;
-      
+
+      if (error) {
+        console.error('Get applications error:', error);
+        throw error;
+      }
+
       res.json({
         success: true,
-        applications
+        applications: applications || []
       });
-      
+
     } catch (error) {
       console.error('Get applications error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch applications'
+        error: 'Failed to fetch applications',
+        details: error.message
       });
     }
   }
 );
 
-// Get applications for a job (employer only)
+// Get single application
+router.get('/:id',
+  authenticate,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const { data: application, error } = await supabase
+        .from('applications')
+        .select(`
+          *,
+          job_listings (
+            *,
+            companies (*)
+          ),
+          profiles (
+            full_name,
+            email,
+            phone
+          )
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return res.status(404).json({
+            success: false,
+            error: 'Application not found'
+          });
+        }
+        throw error;
+      }
+
+      // Check permissions
+      const isOwner = application.user_id === req.user.userId;
+      const isEmployer = req.user.role === 'employer'; // Can see if it's their job
+      const isAdmin = req.user.role === 'admin';
+
+      if (!isOwner && !isEmployer && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized to view this application'
+        });
+      }
+
+      res.json({
+        success: true,
+        application
+      });
+
+    } catch (error) {
+      console.error('Get application error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch application'
+      });
+    }
+  }
+);
+
+// Withdraw application (applicant only)
+router.delete('/:id',
+  authenticate,
+  authorize('applicant'),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Check ownership
+      const { data: application } = await supabase
+        .from('applications')
+        .select('user_id')
+        .eq('id', id)
+        .single();
+
+      if (!application || application.user_id !== req.user.userId) {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized to withdraw this application'
+        });
+      }
+
+      // Delete application
+      const { error } = await supabase
+        .from('applications')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      res.json({
+        success: true,
+        message: 'Application withdrawn successfully'
+      });
+
+    } catch (error) {
+      console.error('Withdraw application error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to withdraw application'
+      });
+    }
+  }
+);
+
+// Get applications for a job (employer/admin only)
 router.get('/job/:jobId',
   authenticate,
   async (req, res) => {
     try {
       const { jobId } = req.params;
-      
-      // Verify employer owns this job
-      const { data: job } = await supabase
-        .from('job_listings')
-        .select('company_id')
-        .eq('id', jobId)
-        .single();
-      
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, company_id')
-        .eq('id', req.user.id)
-        .single();
-      
-      const isOwner = profile.company_id === job?.company_id;
-      const isAdmin = profile.role === 'admin';
-      
-      if (!isOwner && !isAdmin) {
+
+      // Check if user is employer/admin and owns the job
+      if (req.user.role === 'employer') {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('id', req.user.userId)
+          .single();
+
+        const { data: job } = await supabase
+          .from('job_listings')
+          .select('company_id')
+          .eq('id', jobId)
+          .single();
+
+        if (!job || profile.company_id !== job.company_id) {
+          return res.status(403).json({
+            success: false,
+            error: 'Not authorized to view these applications'
+          });
+        }
+      } else if (req.user.role !== 'admin') {
         return res.status(403).json({
           success: false,
-          error: 'Not authorized to view these applications'
+          error: 'Not authorized'
         });
       }
-      
+
       const { data: applications, error } = await supabase
         .from('applications')
         .select(`
           *,
-          profiles (full_name, email, phone)
+          profiles (
+            full_name,
+            email,
+            phone,
+            location
+          )
         `)
         .eq('job_id', jobId)
-        .order('ai_score', { ascending: false });
-      
+        .order('submitted_at', { ascending: false });
+
       if (error) throw error;
-      
+
       res.json({
         success: true,
-        applications
+        applications: applications || []
       });
-      
+
     } catch (error) {
       console.error('Get job applications error:', error);
       res.status(500).json({
@@ -232,231 +301,55 @@ router.get('/job/:jobId',
   }
 );
 
-// Update application status
-router.put('/:id/status',
+// Update application status (employer/admin only)
+router.patch('/:id/status',
   authenticate,
-  [
-    body('status').isIn(['reviewing', 'shortlisted', 'rejected', 'hired']),
-    body('notes').optional().trim()
-  ],
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { status, notes } = req.body;
-      
-      // Get application with job details
-      const { data: application, error: appError } = await supabase
-        .from('applications')
-        .select(`
-          *,
-          job_listings (
-            title,
-            company_id
-          )
-        `)
-        .eq('id', id)
-        .single();
-      
-      if (appError) throw appError;
-      
-      // Verify permissions
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, company_id')
-        .eq('id', req.user.id)
-        .single();
-      
-      const isOwner = profile.company_id === application.job_listings.company_id;
-      const isAdmin = profile.role === 'admin';
-      
-      if (!isOwner && !isAdmin) {
-        return res.status(403).json({
+      const { status } = req.body;
+
+      if (!['pending', 'reviewing', 'shortlisted', 'rejected', 'hired'].includes(status)) {
+        return res.status(400).json({
           success: false,
-          error: 'Not authorized to update this application'
+          error: 'Invalid status'
         });
       }
-      
-      // Update application
-      const { data: updatedApp, error } = await supabase
+
+      // Check permissions (similar to above)
+      if (req.user.role !== 'admin' && req.user.role !== 'employer') {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized'
+        });
+      }
+
+      const { data: application, error } = await supabase
         .from('applications')
         .update({
           status,
-          notes,
-          reviewed_at: new Date().toISOString()
+          updated_at: new Date().toISOString()
         })
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
-      
-      // Notify applicant
-      const statusMessages = {
-        reviewing: 'is being reviewed',
-        shortlisted: 'has been shortlisted',
-        rejected: 'was not selected',
-        hired: 'was successful! Congratulations!'
-      };
-      
-      const notification = `
-        <h1>Application Status Update</h1>
-        <p>Your application for <strong>${application.job_listings.title}</strong> ${statusMessages[status]}.</p>
-        ${notes ? `<p><strong>Notes:</strong> ${notes}</p>` : ''}
-        <p>Login to your account to view details.</p>
-      `;
-      
-      const { data: applicant } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', application.applicant_id)
-        .single();
-      
-      if (applicant?.email) {
-        await sendEmail(
-          applicant.email,
-          `Application Update: ${application.job_listings.title}`,
-          notification
-        );
-      }
-      
+
       res.json({
         success: true,
         message: 'Application status updated',
-        application: updatedApp
+        application
       });
-      
+
     } catch (error) {
-      console.error('Update application error:', error);
+      console.error('Update application status error:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to update application'
+        error: 'Failed to update application status'
       });
     }
   }
 );
-
-// Generate application PDF
-router.get('/:id/pdf',
-  authenticate,
-  async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      const { data: application, error } = await supabase
-        .from('applications')
-        .select(`
-          *,
-          profiles (full_name, email, phone),
-          job_listings (
-            title,
-            companies (name)
-          )
-        `)
-        .eq('id', id)
-        .single();
-      
-      if (error || !application) {
-        return res.status(404).json({
-          success: false,
-          error: 'Application not found'
-        });
-      }
-      
-      // Verify permissions
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, company_id, id')
-        .eq('id', req.user.id)
-        .single();
-      
-      const isApplicant = profile.id === application.applicant_id;
-      const isOwner = profile.company_id === application.job_listings.company_id;
-      const isAdmin = profile.role === 'admin';
-      
-      if (!isApplicant && !isOwner && !isAdmin) {
-        return res.status(403).json({
-          success: false,
-          error: 'Not authorized to view this PDF'
-        });
-      }
-      
-      // Create PDF
-      const doc = new PDFDocument({ margin: 50 });
-      
-      // Set response headers
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=application-${id}.pdf`);
-      
-      doc.pipe(res);
-      
-      // PDF content
-      doc.fontSize(20).text('Job Application', { align: 'center' });
-      doc.moveDown();
-      
-      doc.fontSize(14).text(`Position: ${application.job_listings.title}`);
-      doc.text(`Company: ${application.job_listings.companies.name}`);
-      doc.moveDown();
-      
-      doc.fontSize(16).text('Applicant Information');
-      doc.fontSize(12).text(`Name: ${application.profiles.full_name}`);
-      doc.text(`Email: ${application.profiles.email}`);
-      doc.text(`Phone: ${application.phone}`);
-      doc.text(`Experience: ${application.experience_years} years`);
-      doc.moveDown();
-      
-      doc.fontSize(16).text('Qualifications');
-      application.qualifications.forEach(qual => {
-        doc.fontSize(12).text(`• ${qual}`);
-      });
-      doc.moveDown();
-      
-      doc.fontSize(16).text('Skills');
-      application.skills.forEach(skill => {
-        doc.fontSize(12).text(`• ${skill}`);
-      });
-      doc.moveDown();
-      
-      doc.fontSize(16).text('Cover Letter');
-      doc.fontSize(12).text(application.cover_letter);
-      doc.moveDown();
-      
-      doc.fontSize(10).text(`Application ID: ${id}`, { align: 'right' });
-      doc.text(`Submitted: ${new Date(application.submitted_at).toLocaleDateString()}`, { align: 'right' });
-      
-      doc.end();
-      
-    } catch (error) {
-      console.error('Generate PDF error:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to generate PDF'
-      });
-    }
-  }
-);
-
-// Helper function for AI scoring
-function calculateAIScore(job, applicant) {
-  let score = 50; // Base score
-  
-  // Experience match
-  const jobTitle = job.title.toLowerCase();
-  const applicantSkills = applicant.skills.map(s => s.toLowerCase());
-  
-  // Check for keyword matches
-  const keywords = ['javascript', 'react', 'node', 'python', 'java', 'sql', 'aws'];
-  const matchedKeywords = keywords.filter(keyword => 
-    jobTitle.includes(keyword) && applicantSkills.some(skill => skill.includes(keyword))
-  );
-  
-  score += matchedKeywords.length * 5;
-  
-  // Experience years bonus
-  if (applicant.experienceYears >= 3) score += 10;
-  if (applicant.experienceYears >= 5) score += 15;
-  
-  // Cap at 100
-  return Math.min(score, 100);
-}
 
 module.exports = router;

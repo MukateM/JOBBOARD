@@ -14,12 +14,14 @@ import {
   Search,
   TrendingUp
 } from 'lucide-react';
+import api from '../../services/api';
 
 export const MyApplications = () => {
   const [applications, setApplications] = useState([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
     submitted: 0,
@@ -29,103 +31,39 @@ export const MyApplications = () => {
   });
 
   useEffect(() => {
-    // Mock data for development
-    const mockApplications = [
-      {
-        id: 1,
-        job: {
-          id: 101,
-          title: 'Senior Frontend Developer',
-          company: 'Tech Innovations Inc.',
-          location: 'Remote',
-          logo: 'https://via.placeholder.com/50'
-        },
-        status: 'submitted',
-        appliedDate: '2024-01-15',
-        lastUpdated: '2024-01-15',
-        aiScore: 85,
-        notes: 'Strong match based on React experience'
-      },
-      {
-        id: 2,
-        job: {
-          id: 102,
-          title: 'Backend Engineer',
-          company: 'Data Systems Corp',
-          location: 'New York, NY',
-          logo: 'https://via.placeholder.com/50'
-        },
-        status: 'reviewing',
-        appliedDate: '2024-01-12',
-        lastUpdated: '2024-01-14',
-        aiScore: 92,
-        notes: 'Excellent match for Python skills'
-      },
-      {
-        id: 3,
-        job: {
-          id: 103,
-          title: 'UI/UX Designer',
-          company: 'Creative Studio',
-          location: 'San Francisco, CA',
-          logo: 'https://via.placeholder.com/50'
-        },
-        status: 'shortlisted',
-        appliedDate: '2024-01-10',
-        lastUpdated: '2024-01-13',
-        aiScore: 78,
-        notes: 'Portfolio review scheduled'
-      },
-      {
-        id: 4,
-        job: {
-          id: 104,
-          title: 'DevOps Specialist',
-          company: 'Cloud Solutions',
-          location: 'Remote',
-          logo: 'https://via.placeholder.com/50'
-        },
-        status: 'rejected',
-        appliedDate: '2024-01-05',
-        lastUpdated: '2024-01-08',
-        aiScore: 45,
-        notes: 'Insufficient AWS experience'
-      },
-      {
-        id: 5,
-        job: {
-          id: 105,
-          title: 'Product Manager',
-          company: 'Growth Tech',
-          location: 'Boston, MA',
-          logo: 'https://via.placeholder.com/50'
-        },
-        status: 'submitted',
-        appliedDate: '2024-01-18',
-        lastUpdated: '2024-01-18',
-        aiScore: 67,
-        notes: 'Good product management experience'
-      }
-    ];
-
-    // Calculate stats
-    const stats = {
-      total: mockApplications.length,
-      submitted: mockApplications.filter(app => app.status === 'submitted').length,
-      reviewing: mockApplications.filter(app => app.status === 'reviewing').length,
-      shortlisted: mockApplications.filter(app => app.status === 'shortlisted').length,
-      rejected: mockApplications.filter(app => app.status === 'rejected').length
-    };
-
-    setTimeout(() => {
-      setApplications(mockApplications);
-      setStats(stats);
-      setLoading(false);
-    }, 500);
+    fetchApplications();
   }, []);
+
+  const fetchApplications = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/applications/me');
+      
+      if (response.data.success) {
+        const apps = response.data.applications || [];
+        setApplications(apps);
+        
+        // Calculate stats
+        const stats = {
+          total: apps.length,
+          submitted: apps.filter(app => app.status === 'submitted' || app.status === 'pending').length,
+          reviewing: apps.filter(app => app.status === 'reviewing').length,
+          shortlisted: apps.filter(app => app.status === 'shortlisted').length,
+          rejected: apps.filter(app => app.status === 'rejected').length
+        };
+        setStats(stats);
+      }
+    } catch (err) {
+      console.error('Failed to fetch applications:', err);
+      setError('Failed to load applications');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusBadge = (status) => {
     const styles = {
+      pending: 'bg-blue-100 text-blue-800',
       submitted: 'bg-blue-100 text-blue-800',
       reviewing: 'bg-yellow-100 text-yellow-800',
       shortlisted: 'bg-purple-100 text-purple-800',
@@ -134,6 +72,7 @@ export const MyApplications = () => {
     };
 
     const icons = {
+      pending: <Clock className="h-3 w-3 mr-1" />,
       submitted: <Clock className="h-3 w-3 mr-1" />,
       reviewing: <Eye className="h-3 w-3 mr-1" />,
       shortlisted: <TrendingUp className="h-3 w-3 mr-1" />,
@@ -142,6 +81,7 @@ export const MyApplications = () => {
     };
 
     const labels = {
+      pending: 'Pending',
       submitted: 'Submitted',
       reviewing: 'Reviewing',
       shortlisted: 'Shortlisted',
@@ -150,17 +90,11 @@ export const MyApplications = () => {
     };
 
     return (
-      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${styles[status]}`}>
-        {icons[status]}
-        {labels[status]}
+      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${styles[status] || styles.pending}`}>
+        {icons[status] || icons.pending}
+        {labels[status] || 'Pending'}
       </span>
     );
-  };
-
-  const getScoreColor = (score) => {
-    if (score >= 80) return 'text-green-600 bg-green-50';
-    if (score >= 60) return 'text-yellow-600 bg-yellow-50';
-    return 'text-red-600 bg-red-50';
   };
 
   const filteredApplications = applications.filter(app => {
@@ -168,18 +102,47 @@ export const MyApplications = () => {
     if (search) {
       const searchLower = search.toLowerCase();
       return (
-        app.job.title.toLowerCase().includes(searchLower) ||
-        app.job.company.toLowerCase().includes(searchLower) ||
-        app.job.location.toLowerCase().includes(searchLower)
+        app.job_listings?.title?.toLowerCase().includes(searchLower) ||
+        app.job_listings?.companies?.name?.toLowerCase().includes(searchLower) ||
+        app.job_listings?.location?.toLowerCase().includes(searchLower)
       );
     }
     return true;
   });
 
+  const handleWithdraw = async (applicationId) => {
+    if (!confirm('Are you sure you want to withdraw this application?')) return;
+    
+    try {
+      await api.delete(`/applications/${applicationId}`);
+      fetchApplications(); // Refresh the list
+    } catch (err) {
+      console.error('Failed to withdraw application:', err);
+      alert('Failed to withdraw application');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Error Loading Applications</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={fetchApplications}
+            className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
@@ -246,16 +209,12 @@ export const MyApplications = () => {
                 >
                   <option value="all">All Applications</option>
                   <option value="submitted">Submitted</option>
+                  <option value="pending">Pending</option>
                   <option value="reviewing">Reviewing</option>
                   <option value="shortlisted">Shortlisted</option>
                   <option value="rejected">Rejected</option>
                 </select>
               </div>
-              
-              <button className="flex items-center text-primary-600 hover:text-primary-700">
-                <Download className="h-5 w-5 mr-1" />
-                <span className="text-sm">Export</span>
-              </button>
             </div>
           </div>
         </div>
@@ -272,7 +231,7 @@ export const MyApplications = () => {
                   : 'You haven\'t applied to any jobs yet.'}
               </p>
               <Link
-                to="/"
+                to="/jobs"
                 className="inline-flex items-center bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700"
               >
                 <Briefcase className="h-5 w-5 mr-2" />
@@ -287,21 +246,34 @@ export const MyApplications = () => {
                     {/* Job Info */}
                     <div className="flex-1">
                       <div className="flex items-start mb-4">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-4">
-                          <Building className="h-6 w-6 text-gray-600" />
-                        </div>
+                        {application.job_listings?.companies?.logo_url ? (
+                          <img 
+                            src={application.job_listings.companies.logo_url} 
+                            alt={application.job_listings.companies.name}
+                            className="w-12 h-12 rounded-lg mr-4 object-cover"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mr-4">
+                            <Building className="h-6 w-6 text-gray-600" />
+                          </div>
+                        )}
                         <div>
                           <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                            <Link to={`/jobs/${application.job.id}`} className="hover:text-primary-600">
-                              {application.job.title}
+                            <Link 
+                              to={`/jobs/${application.job_id}`} 
+                              className="hover:text-primary-600"
+                            >
+                              {application.job_listings?.title || 'Job Title'}
                             </Link>
                           </h3>
                           <div className="flex flex-wrap items-center gap-3">
-                            <span className="text-gray-600">{application.job.company}</span>
+                            <span className="text-gray-600">
+                              {application.job_listings?.companies?.name || 'Company'}
+                            </span>
                             <span className="text-gray-500">•</span>
                             <span className="text-gray-600 flex items-center">
                               <MapPin className="h-4 w-4 mr-1" />
-                              {application.job.location}
+                              {application.job_listings?.location || 'Location'}
                             </span>
                           </div>
                         </div>
@@ -314,55 +286,40 @@ export const MyApplications = () => {
                         </div>
                         <div className="text-sm text-gray-500 flex items-center">
                           <Calendar className="h-4 w-4 mr-1" />
-                          Applied: {new Date(application.appliedDate).toLocaleDateString()}
+                          Applied: {new Date(application.submitted_at || application.created_at).toLocaleDateString()}
                         </div>
-                        {application.status !== 'submitted' && (
+                        {application.updated_at && application.updated_at !== application.created_at && (
                           <div className="text-sm text-gray-500">
-                            Updated: {new Date(application.lastUpdated).toLocaleDateString()}
+                            Updated: {new Date(application.updated_at).toLocaleDateString()}
                           </div>
                         )}
-                      </div>
-
-                      {/* AI Score */}
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">AI Match Score</span>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getScoreColor(application.aiScore)}`}>
-                            {application.aiScore}%
-                          </span>
-                        </div>
-                        <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full ${application.aiScore >= 80 ? 'bg-green-500' : application.aiScore >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                            style={{ width: `${application.aiScore}%` }}
-                          ></div>
-                        </div>
                       </div>
                     </div>
 
                     {/* Actions */}
                     <div className="mt-6 lg:mt-0 lg:ml-6 flex flex-col space-y-3">
                       <Link
-                        to={`/jobs/${application.job.id}`}
+                        to={`/jobs/${application.job_id}`}
                         className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-center text-sm"
                       >
                         View Job
                       </Link>
-                      <button className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
-                        View Application
-                      </button>
-                      <button className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-sm">
+                      <button 
+                        onClick={() => handleWithdraw(application.id)}
+                        className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 text-sm"
+                      >
                         Withdraw
                       </button>
                     </div>
                   </div>
 
-                  {/* Notes */}
-                  {application.notes && (
+                  {/* Cover Letter */}
+                  {application.cover_letter && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
                       <p className="text-sm text-gray-600">
-                        <span className="font-medium">Notes: </span>
-                        {application.notes}
+                        <span className="font-medium">Cover Letter: </span>
+                        {application.cover_letter.substring(0, 200)}
+                        {application.cover_letter.length > 200 && '...'}
                       </p>
                     </div>
                   )}
@@ -388,9 +345,9 @@ export const MyApplications = () => {
             <div className="flex items-start">
               <CheckCircle className="h-5 w-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
               <div>
-                <h4 className="font-medium text-blue-900 mb-1">Improve Your Score</h4>
+                <h4 className="font-medium text-blue-900 mb-1">Update Your Profile</h4>
                 <p className="text-sm text-blue-700">
-                  Add more skills and experience to your profile to increase your AI match scores.
+                  Keep your profile up to date with your latest skills and experience.
                 </p>
               </div>
             </div>

@@ -207,7 +207,7 @@ export const ApplyJob = () => {
                   {...register('phone')}
                   type="tel"
                   className="input-field"
-                  placeholder="+1 (555) 123-4567"
+                  placeholder="+260 123 456 789"
                 />
                 {errors.phone && (
                   <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>
@@ -245,7 +245,7 @@ export const ApplyJob = () => {
                   onChange={(e) => setQualificationInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addQualification())}
                   className="input-field"
-                  placeholder="e.g., Bachelor's in Computer Science"
+                  placeholder="e.g., Bachelor's in Business Administration"
                 />
                 <button
                   type="button"
@@ -293,7 +293,7 @@ export const ApplyJob = () => {
                   onChange={(e) => setSkillInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
                   className="input-field"
-                  placeholder="e.g., JavaScript, React, Node.js"
+                  placeholder="e.g., Data Analysis, Excel , DHIS2, PowerBI, etc"
                 />
                 <button
                   type="button"
