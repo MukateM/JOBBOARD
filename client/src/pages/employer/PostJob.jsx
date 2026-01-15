@@ -230,7 +230,7 @@ export const PostJob = () => {
                     value={formData.location}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="e.g., New York, NY or Remote"
+                    placeholder="e.g., Lusaka, Ndola or Remote"
                     required
                   />
                 </div>
@@ -304,7 +304,7 @@ export const PostJob = () => {
                     onChange={(e) => setRequirementInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRequirement())}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="e.g., 5+ years of React experience"
+                    placeholder="e.g., 5+ years experience in Accounting"
                   />
                   <button
                     type="button"
@@ -394,7 +394,7 @@ export const PostJob = () => {
                     onChange={(e) => setBenefitInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addBenefit())}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    placeholder="e.g., Health insurance, 401k matching"
+                    placeholder="e.g., Health insurance, etc"
                   />
                   <button
                     type="button"
@@ -440,8 +440,6 @@ export const PostJob = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
                     <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="GBP">GBP (£)</option>
                     <option value="ZMW">ZMW (K)</option>
                   </select>
                 </div>

@@ -1,3 +1,4 @@
+// server/src/routes/applications.js
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../config/database');
@@ -43,7 +44,7 @@ router.post('/',
         });
       }
 
-      // Create application
+      // Create application (trigger will auto-calculate ai_score)
       const { data: application, error } = await supabase
         .from('applications')
         .insert([{
@@ -166,7 +167,7 @@ router.get('/:id',
 
       // Check permissions
       const isOwner = application.user_id === req.user.userId;
-      const isEmployer = req.user.role === 'employer'; // Can see if it's their job
+      const isEmployer = req.user.role === 'employer';
       const isAdmin = req.user.role === 'admin';
 
       if (!isOwner && !isEmployer && !isAdmin) {
@@ -236,7 +237,72 @@ router.delete('/:id',
   }
 );
 
-// Get applications for a job (employer/admin only)
+// ✨ NEW: Get RANKED applications for a job (employer/admin only)
+router.get('/job/:jobId/ranked',
+  authenticate,
+  async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { minScore = 0, limit = 50 } = req.query;
+
+      // Check if user is employer/admin and owns the job
+      if (req.user.role === 'employer') {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('id', req.user.userId)
+          .single();
+
+        const { data: job } = await supabase
+          .from('job_listings')
+          .select('company_id')
+          .eq('id', jobId)
+          .single();
+
+        if (!job || profile.company_id !== job.company_id) {
+          return res.status(403).json({
+            success: false,
+            error: 'Not authorized to view these applications'
+          });
+        }
+      } else if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Not authorized'
+        });
+      }
+
+      // Call the Postgres function to get ranked candidates
+      const { data: rankedCandidates, error } = await supabase
+        .rpc('get_ranked_candidates', {
+          p_job_id: jobId,
+          p_min_score: parseInt(minScore) || 0,
+          p_limit: parseInt(limit) || 50
+        });
+
+      if (error) {
+        console.error('Get ranked candidates error:', error);
+        throw error;
+      }
+
+      res.json({
+        success: true,
+        candidates: rankedCandidates || [],
+        count: rankedCandidates?.length || 0
+      });
+
+    } catch (error) {
+      console.error('Get ranked applications error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch ranked applications',
+        details: error.message
+      });
+    }
+  }
+);
+
+// Get applications for a job (employer/admin only) - UPDATED with scores
 router.get('/job/:jobId',
   authenticate,
   async (req, res) => {
@@ -270,6 +336,7 @@ router.get('/job/:jobId',
         });
       }
 
+      // Now returns applications sorted by match score
       const { data: applications, error } = await supabase
         .from('applications')
         .select(`
@@ -282,6 +349,7 @@ router.get('/job/:jobId',
           )
         `)
         .eq('job_id', jobId)
+        .order('ai_score', { ascending: false, nullsLast: true })
         .order('submitted_at', { ascending: false });
 
       if (error) throw error;
@@ -316,7 +384,7 @@ router.patch('/:id/status',
         });
       }
 
-      // Check permissions (similar to above)
+      // Check permissions
       if (req.user.role !== 'admin' && req.user.role !== 'employer') {
         return res.status(403).json({
           success: false,

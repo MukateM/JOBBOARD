@@ -93,14 +93,14 @@ export const AdminDashboard = () => {
               Pending Jobs
             </button>
             <button
-              onClick={() => setFilter('active')}
+              onClick={() => setFilter('approved')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'active'
+                filter === 'approved'
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              Active Jobs
+              Approved Jobs
             </button>
             <button
               onClick={() => setFilter('rejected')}
@@ -203,7 +203,7 @@ export const AdminDashboard = () => {
                 {/* Status Badge */}
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    job.status === 'active' ? 'bg-green-100 text-green-800' :
+                    job.status === 'approved' ? 'bg-green-100 text-green-800' :
                     job.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                     job.status === 'rejected' ? 'bg-red-100 text-red-800' :
                     'bg-gray-100 text-gray-800'

@@ -16,7 +16,8 @@ import {
   Eye,
   Briefcase,
   Award,
-  TrendingUp
+  TrendingUp,
+  Target
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -84,6 +85,75 @@ export const JobApplications = () => {
       console.error('Failed to update status:', err);
       alert('Failed to update application status');
     }
+  };
+
+  // ✨ NEW: Get match score badge with color coding
+  const getMatchScoreBadge = (score) => {
+    if (score === null || score === undefined) {
+      return (
+        <div className="flex items-center px-3 py-2 bg-gray-100 rounded-lg">
+          <Target className="h-4 w-4 mr-2 text-gray-400" />
+          <span className="text-sm text-gray-600">No Score</span>
+        </div>
+      );
+    }
+
+    let bgColor, textColor, label, ringColor;
+    
+    if (score >= 80) {
+      bgColor = 'bg-green-50';
+      textColor = 'text-green-700';
+      label = 'Excellent Match';
+      ringColor = 'ring-green-200';
+    } else if (score >= 60) {
+      bgColor = 'bg-blue-50';
+      textColor = 'text-blue-700';
+      label = 'Good Match';
+      ringColor = 'ring-blue-200';
+    } else if (score >= 40) {
+      bgColor = 'bg-yellow-50';
+      textColor = 'text-yellow-700';
+      label = 'Fair Match';
+      ringColor = 'ring-yellow-200';
+    } else {
+      bgColor = 'bg-orange-50';
+      textColor = 'text-orange-700';
+      label = 'Weak Match';
+      ringColor = 'ring-orange-200';
+    }
+
+    return (
+      <div className={`flex items-center px-3 py-2 ${bgColor} rounded-lg ring-2 ${ringColor}`}>
+        <Target className={`h-4 w-4 mr-2 ${textColor}`} />
+        <div className="flex items-center">
+          <span className={`text-2xl font-bold ${textColor} mr-2`}>{score}</span>
+          <div className="flex flex-col">
+            <span className={`text-xs font-medium ${textColor}`}>{label}</span>
+            <span className="text-xs text-gray-500">Match Score</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ✨ NEW: Get progress bar for match score
+  const getMatchScoreBar = (score) => {
+    if (score === null || score === undefined) return null;
+
+    let barColor;
+    if (score >= 80) barColor = 'bg-green-500';
+    else if (score >= 60) barColor = 'bg-blue-500';
+    else if (score >= 40) barColor = 'bg-yellow-500';
+    else barColor = 'bg-orange-500';
+
+    return (
+      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+        <div
+          className={`${barColor} h-2 rounded-full transition-all duration-300`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+    );
   };
 
   const getStatusBadge = (status) => {
@@ -169,7 +239,7 @@ export const JobApplications = () => {
                 {job?.title || 'Job Applications'}
               </h1>
               <p className="text-gray-600 mt-2">
-                {applications.length} total application{applications.length !== 1 ? 's' : ''}
+                {applications.length} total application{applications.length !== 1 ? 's' : ''} • Sorted by match score
               </p>
             </div>
             <Link
@@ -300,11 +370,11 @@ export const JobApplications = () => {
               >
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start">
-                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mr-4">
+                    <div className="flex items-start flex-1">
+                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mr-4 flex-shrink-0">
                         <User className="h-6 w-6 text-primary-600" />
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <h3 className="text-lg font-semibold text-gray-900">
                           {application.profiles?.full_name || 'Applicant'}
                         </h3>
@@ -334,7 +404,10 @@ export const JobApplications = () => {
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
+                    
+                    {/* ✨ Match Score & Status - Right Side */}
+                    <div className="flex flex-col items-end gap-3 ml-4">
+                      {getMatchScoreBadge(application.ai_score)}
                       {getStatusBadge(application.status)}
                       <span className="text-sm text-gray-500 flex items-center">
                         <Calendar className="h-4 w-4 mr-1" />
@@ -342,6 +415,13 @@ export const JobApplications = () => {
                       </span>
                     </div>
                   </div>
+
+                  {/* ✨ Match Score Progress Bar */}
+                  {application.ai_score !== null && application.ai_score !== undefined && (
+                    <div className="mb-4">
+                      {getMatchScoreBar(application.ai_score)}
+                    </div>
+                  )}
 
                   {/* Experience & Skills */}
                   {(application.experience_years || application.skills?.length > 0) && (
@@ -433,9 +513,13 @@ export const JobApplications = () => {
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b sticky top-0 bg-white">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Application Details
-                </h2>
+                <div className="flex items-center gap-4">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Application Details
+                  </h2>
+                  {/* ✨ Match Score in Modal */}
+                  {getMatchScoreBadge(selectedApplication.ai_score)}
+                </div>
                 <button
                   onClick={() => setShowModal(false)}
                   className="text-gray-400 hover:text-gray-600"

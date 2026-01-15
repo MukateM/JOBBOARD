@@ -83,9 +83,6 @@ router.get('/', [
     });
   }
 });
-
-// IMPORTANT: Specific routes like /employer/mine MUST come before /:id
-// Get employer's jobs WITH APPLICATIONS
 router.get('/employer/mine',
   authenticate,
   authorize('employer'),
@@ -234,7 +231,7 @@ router.post('/',
         experienceLevel,
         salaryMin,
         salaryMax,
-        salaryCurrency = 'USD',
+        salaryCurrency = 'ZMW',
         categoryId
       } = req.body;
       

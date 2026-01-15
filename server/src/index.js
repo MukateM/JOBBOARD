@@ -2,11 +2,12 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
-const adminRoutes = require('./routes/admin');
+const adminRoutes = require('./routes/adminRoutes'); 
 const jobRoutes = require('./routes/jobs');
 const companiesRouter = require('./routes/companies');
 const profilesRouter = require('./routes/profiles');
 const applicationsRouter = require('./routes/applications');
+const recruitmentPartnersRouter = require('./routes/recruitmentPartners');
 
 const app = express();
 
@@ -18,7 +19,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
-console.log('🔓 CORS allowing origins:', allowedOrigins);
+console.log('🔐 CORS allowing origins:', allowedOrigins);
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -44,7 +45,7 @@ app.use('/api/jobs', jobRoutes);
 app.use('/api/companies', companiesRouter);
 app.use('/api/profiles', profilesRouter);
 app.use('/api/applications', applicationsRouter);
-app.use('/api/applications', applicationsRouter);
+app.use('/api/recruitment-partners', recruitmentPartnersRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -64,5 +65,5 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`🔍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

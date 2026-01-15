@@ -17,7 +17,7 @@ const API_URL = 'http://localhost:5000/api';
 export const EmployerDashboard = () => {
   const [stats, setStats] = useState({
     totalJobs: 0,
-    activeJobs: 0,
+    approvedJobs: 0,
     pendingJobs: 0,
     totalApplications: 0
   });
@@ -48,13 +48,13 @@ export const EmployerDashboard = () => {
         setNotification(response.data.message || '');
 
         const totalJobs = jobs.length;
-        const activeJobs = jobs.filter(j => j.status === 'approved').length;
+        const approvedJobs = jobs.filter(j => j.status === 'approved').length;
         const pendingJobs = jobs.filter(j => j.status === 'pending').length;
         const totalApplications = jobs.reduce((sum, job) => sum + (job.applications?.length || 0), 0);
         
         setStats({
           totalJobs,
-          activeJobs,
+          approvedJobs,
           pendingJobs,
           totalApplications
         });
@@ -83,7 +83,7 @@ export const EmployerDashboard = () => {
     };
 
     const labels = {
-      approved: 'Active',
+      approved: 'Approved',
       pending: 'Pending',
       rejected: 'Rejected',
       closed: 'Closed'
@@ -153,8 +153,8 @@ export const EmployerDashboard = () => {
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Active Jobs</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.activeJobs}</p>
+                <p className="text-sm text-gray-500">Approved Jobs</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{stats.approvedJobs}</p>
               </div>
               <div className="bg-green-100 p-3 rounded-lg">
                 <CheckCircle className="h-6 w-6 text-green-600" />
@@ -162,7 +162,7 @@ export const EmployerDashboard = () => {
             </div>
             <div className="mt-4">
               <span className="text-sm text-gray-500">
-                {stats.totalJobs > 0 ? Math.round((stats.activeJobs / stats.totalJobs) * 100) : 0}% of total
+                {stats.totalJobs > 0 ? Math.round((stats.approvedJobs / stats.totalJobs) * 100) : 0}% of total
               </span>
             </div>
           </div>
