@@ -1,37 +1,61 @@
-import axios from 'axios';
+import { supabase } from '../config/supabase';
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-  headers: {
-    'Content-Type': 'application/json',
+// This is now just a wrapper for backwards compatibility
+// I will gradually replace api.get/post with direct supabase calls
+
+const api = {
+  // Auth
+  async register(data) {
+    const { data: authData, error } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          full_name: data.fullName,
+          role: data.role
+        }
+      }
+    });
+    
+    if (error) throw error;
+    return { data: { success: true, user: authData.user } };
   },
-});
 
-// Add auth token to requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+  async login(data) {
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
+      email: data.email,
+      password: data.password
+    });
+    
+    if (error) throw error;
+    return { data: { success: true, user: authData.user } };
   },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
-// Handle response errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+  // Jobs
+  async get(url) {
+    if (url.startsWith('/jobs')) {
+      const { data, error } = await supabase
+        .from('job_listings')
+        .select(`
+          *,
+          companies (name, logo_url),
+          job_categories (name)
+        `)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return { data: { success: true, jobs: data, pagination: {} } };
     }
-    return Promise.reject(error);
+    
+    // Add more routes as needed
+    throw new Error('Route not implemented yet');
+  },
+
+  async post(url, data) {
+    // Implementation for POST requests
+    throw new Error('Route not implemented yet');
   }
-);
+};
 
 export default api;

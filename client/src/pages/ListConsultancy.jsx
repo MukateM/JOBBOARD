@@ -1,3 +1,4 @@
+// client/src/pages/ListConsultancy.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Mail, Phone, Globe, MapPin, Users, CheckCircle, Upload } from 'lucide-react';
@@ -39,6 +40,9 @@ export const ListConsultancy = () => {
     setError('');
 
     try {
+      // Log the data being sent for debugging
+      console.log('Submitting form data:', formData);
+      
       const response = await api.post('/recruitment-partners', formData);
 
       if (response.data.success) {
@@ -49,7 +53,8 @@ export const ListConsultancy = () => {
       }
     } catch (err) {
       console.error('Submit error:', err);
-      setError(err.response?.data?.error || 'Failed to submit application. Please try again.');
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Failed to submit application. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -84,7 +89,7 @@ export const ListConsultancy = () => {
               List Your Recruitment Agency
             </h1>
             <p className="text-gray-600 mb-4">
-              Join Zambia's premier job platform and connect with companies actively looking for recruitment services.
+              Join Zambia's growing job platform and connect with companies actively looking for recruitment services.
             </p>
             
             {/* Benefits */}
@@ -112,7 +117,7 @@ export const ListConsultancy = () => {
 
             <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> All applications are reviewed by our team. Featured listings start at ZMW 5,000/month. We'll contact you with pricing details after approval.
+                <strong>Note:</strong> All applications are reviewed by our team. We'll contact you with pricing details after approval.
               </p>
             </div>
           </div>
@@ -162,7 +167,7 @@ export const ListConsultancy = () => {
                       className="mt-3"
                     />
                     <p className="text-xs text-gray-500 mt-2">
-                      Or you can email your logo to logos@zedlinkcareers.co.zm after approval
+                      Or you can email your logo to zedlinkcareers@gmail.com after approval
                     </p>
                   </div>
                 </div>
@@ -226,7 +231,7 @@ export const ListConsultancy = () => {
                     onChange={handleChange}
                     required
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                    placeholder="e.g., Executive Search, Tech Recruitment, Healthcare Staffing"
+                    placeholder="e.g., Executive Search, Recruitment, Healthcare Staffing"
                   />
                 </div>
 

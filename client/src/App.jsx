@@ -25,6 +25,9 @@ import { MyApplications } from './pages/applicant/Applications';
 // Admin Pages
 import { AdminDashboard } from './pages/admin/Dashboard';
 
+// Recruitment Partners Pages - NEW
+import { ListConsultancy } from './pages/ListConsultancy';
+
 function App() {
   return (
     <Router>
@@ -38,6 +41,13 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               <Route path="/jobs/:id" element={<JobDetails />} />
+              
+              {/* Recruitment Partners - NEW */}
+              <Route path="/list-consultancy" element={
+                <ProtectedRoute roles={['employer']}>
+                  <ListConsultancy />
+                </ProtectedRoute>
+              } />
               
               {/* Protected Applicant Routes */}
               <Route path="/apply/:id" element={

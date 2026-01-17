@@ -8,15 +8,10 @@ import {
   Users, 
   TrendingUp,
   ArrowRight,
-  Star,
-  CheckCircle,
-  Phone,
-  Mail
+  Star
 } from 'lucide-react';
-import axios from 'axios';
+import { supabase } from '../config/supabase';
 import { useDebounce } from '../hooks/useDebounce';
-
-const API_URL = 'http://localhost:5000/api';
 
 export const Home = () => {
   const [jobs, setJobs] = useState([]);
@@ -36,48 +31,59 @@ export const Home = () => {
 
   const debouncedSearch = useDebounce(searchTerm, 500);
   const debouncedLocation = useDebounce(location, 500);
-  const cancelTokenRef = useRef(null);
 
   useEffect(() => {
     fetchJobs();
-    fetchRecruitmentPartners();
-    return () => {
-      if (cancelTokenRef.current) {
-        cancelTokenRef.current.cancel('Component unmounted');
-      }
-    };
   }, [debouncedSearch, debouncedLocation, remoteOnly, currentPage]);
+
+  useEffect(() => {
+    fetchRecruitmentPartners();
+  }, []);
 
   const fetchJobs = async () => {
     try {
-      if (cancelTokenRef.current) {
-        cancelTokenRef.current.cancel('New request initiated');
-      }
-      cancelTokenRef.current = axios.CancelToken.source();
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams({
-        page: currentPage,
-        limit: 6,
-        ...(debouncedSearch && { search: debouncedSearch }),
-        ...(debouncedLocation && { location: debouncedLocation }),
-        ...(remoteOnly && { remote: true })
-      });
+      const limit = 6;
+      const offset = (currentPage - 1) * limit;
 
-      const response = await axios.get(`${API_URL}/jobs?${params}`, {
-        cancelToken: cancelTokenRef.current.token
+      let query = supabase
+        .from('job_listings')
+        .select(`
+          *,
+          companies (name, logo_url)
+        `, { count: 'exact' })
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      // Apply filters
+      if (debouncedSearch) {
+        query = query.or(`title.ilike.%${debouncedSearch}%,description.ilike.%${debouncedSearch}%`);
+      }
+
+      if (debouncedLocation) {
+        query = query.ilike('location', `%${debouncedLocation}%`);
+      }
+
+      if (remoteOnly) {
+        query = query.eq('remote_ok', true);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+
+      setJobs(data || []);
+      setPagination({
+        page: currentPage,
+        total: count || 0,
+        pages: Math.ceil((count || 0) / limit)
       });
-      
-      if (response.data.success) {
-        setJobs(response.data.jobs);
-        setPagination(response.data.pagination);
-      }
     } catch (error) {
-      if (!axios.isCancel(error)) {
-        console.error('Failed to fetch jobs:', error);
-        setError('Failed to load jobs. Please try again.');
-      }
+      console.error('Failed to fetch jobs:', error);
+      setError('Failed to load jobs. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -86,10 +92,19 @@ export const Home = () => {
   const fetchRecruitmentPartners = async () => {
     try {
       setPartnersLoading(true);
-      const response = await axios.get(`${API_URL}/recruitment-partners/featured`);
-      if (response.data.success) {
-        setRecruitmentPartners(response.data.partners || []);
-      }
+      
+      const { data, error } = await supabase
+        .from('recruitment_partners')
+        .select('*')
+        .eq('status', 'approved')
+        .eq('is_featured', true)
+        .or(`featured_until.is.null,featured_until.gt.${new Date().toISOString()}`)
+        .order('rating', { ascending: false })
+        .limit(3);
+
+      if (error) throw error;
+
+      setRecruitmentPartners(data || []);
     } catch (error) {
       console.error('Failed to fetch recruitment partners:', error);
     } finally {
@@ -117,7 +132,6 @@ export const Home = () => {
       <div className="bg-gradient-to-br from-green-50 via-white to-orange-50 border-b border-gray-200">
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-5xl mx-auto">
-            {/* Title + Stats in Same Section */}
             <div className="text-center mb-6">
               <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
                 Zambia's Leading Job Platform
@@ -227,7 +241,17 @@ export const Home = () => {
               <div className="text-center py-12 bg-gray-50 rounded-lg">
                 <Briefcase className="h-12 w-12 text-gray-400 mx-auto mb-3" />
                 <h3 className="font-semibold text-gray-900 mb-2">No jobs found</h3>
-                <p className="text-sm text-gray-600">Try different keywords</p>
+                <p className="text-sm text-gray-600 mb-4">Try different keywords</p>
+                <button 
+                  onClick={() => {
+                    setSearchTerm('');
+                    setLocation('');
+                    setRemoteOnly(false);
+                  }}
+                  className="text-orange-600 hover:text-orange-700 font-medium text-sm"
+                >
+                  Clear all filters
+                </button>
               </div>
             ) : (
               <>
@@ -243,9 +267,9 @@ export const Home = () => {
                           <h3 className="font-bold text-gray-900 text-lg mb-1">
                             {job.title}
                           </h3>
-                          <p className="text-gray-600">{job.companies.name}</p>
+                          <p className="text-gray-600">{job.companies?.name}</p>
                         </div>
-                        {job.companies.logo_url && (
+                        {job.companies?.logo_url && (
                           <img
                             src={job.companies.logo_url}
                             alt={job.companies.name}
@@ -330,7 +354,7 @@ export const Home = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {recruitmentPartners.slice(0, 3).map((partner) => (
+                    {recruitmentPartners.map((partner) => (
                       <div key={partner.id} className="bg-white rounded-lg p-4 border border-orange-200">
                         <div className="flex items-start gap-3 mb-3">
                           {partner.logo_url ? (

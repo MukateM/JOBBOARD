@@ -1,3 +1,4 @@
+// server/src/routes/recruitmentPartners.js
 const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
@@ -139,8 +140,8 @@ router.post('/',
     body('phone').notEmpty().trim(),
     body('specialty').notEmpty().trim(),
     body('description').notEmpty().trim(),
-    body('website').optional().isURL(),
-    body('yearsInBusiness').optional().isInt({ min: 0 })
+    body('website').optional({ checkFalsy: true }).isURL(),
+    body('yearsInBusiness').optional({ checkFalsy: true }).isInt({ min: 0 })
   ],
   async (req, res) => {
     try {
