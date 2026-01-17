@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import { supabase } from '../../config/supabase'; // Add this import
+import { useAuth } from '../../context/AuthContext'; // Add this import
 import { 
   Briefcase, 
   Users, 
@@ -12,9 +13,8 @@ import {
   XCircle
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
-
 export const EmployerDashboard = () => {
+  const { user } = useAuth(); // Get current user
   const [stats, setStats] = useState({
     totalJobs: 0,
     approvedJobs: 0,
@@ -28,37 +28,54 @@ export const EmployerDashboard = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       
-      const response = await axios.get(`${API_URL}/jobs/employer/mine`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // Fetch jobs created by current employer with their applications
+      const { data: jobs, error: jobsError } = await supabase
+        .from('job_listings')
+        .select(`
+          *,
+          job_applications (*)
+        `)
+        .eq('created_by', user.id) // Only get jobs created by this employer
+        .order('created_at', { ascending: false });
 
-      if (response.data.success) {
-        const jobs = response.data.jobs || [];
-        setRecentJobs(jobs.slice(0, 4));
-        setNotification(response.data.message || '');
+      if (jobsError) throw jobsError;
 
-        const totalJobs = jobs.length;
-        const approvedJobs = jobs.filter(j => j.status === 'approved').length;
-        const pendingJobs = jobs.filter(j => j.status === 'pending').length;
-        const totalApplications = jobs.reduce((sum, job) => sum + (job.applications?.length || 0), 0);
-        
-        setStats({
-          totalJobs,
-          approvedJobs,
-          pendingJobs,
-          totalApplications
-        });
+      setRecentJobs(jobs?.slice(0, 4) || []);
+      
+      // Check if user has a company
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.company_id) {
+        setNotification('Please set up your company profile first to start posting jobs.');
       }
+
+      // Calculate statistics
+      const totalJobs = jobs?.length || 0;
+      const approvedJobs = jobs?.filter(j => j.status === 'approved').length || 0;
+      const pendingJobs = jobs?.filter(j => j.status === 'pending').length || 0;
+      const totalApplications = jobs?.reduce((sum, job) => 
+        sum + (job.job_applications?.length || 0), 0
+      ) || 0;
+      
+      setStats({
+        totalJobs,
+        approvedJobs,
+        pendingJobs,
+        totalApplications
+      });
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
       setError('Failed to load dashboard data');
@@ -257,7 +274,7 @@ export const EmployerDashboard = () => {
                         <div className="flex items-center space-x-4 mt-2">
                           <span className="text-sm text-gray-500 flex items-center">
                             <Users className="h-3 w-3 mr-1" />
-                            {job.applications?.length || 0} applications
+                            {job.job_applications?.length || 0} applications
                           </span>
                           <span className="text-sm text-gray-500">{job.location}</span>
                         </div>
@@ -271,7 +288,7 @@ export const EmployerDashboard = () => {
                         Posted {new Date(job.created_at).toLocaleDateString()}
                       </span>
                       <div className="flex gap-2">
-                        {job.applications?.length > 0 && (
+                        {job.job_applications?.length > 0 && (
                           <Link 
                             to={`/employer/jobs/${job.id}/applications`}
                             className="text-primary-600 hover:text-primary-700 text-sm font-medium flex items-center"

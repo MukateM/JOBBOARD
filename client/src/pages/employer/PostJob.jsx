@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { supabase } from '../../config/supabase'; 
+import { useAuth } from '../../context/AuthContext'; 
 import { 
   ArrowLeft, 
   Save, 
@@ -9,10 +10,9 @@ import {
   Briefcase
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
-
 export const PostJob = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // Get current user
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -26,7 +26,7 @@ export const PostJob = () => {
     experienceLevel: 'mid',
     salaryMin: '',
     salaryMax: '',
-    salaryCurrency: 'USD',
+    salaryCurrency: 'ZMW',
     category: ''
   });
 
@@ -112,39 +112,59 @@ export const PostJob = () => {
     setError('');
 
     try {
+      // First, get the user's company_id from their profile
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      if (!profile.company_id) {
+        setError('Please set up your company profile first before posting jobs.');
+        setLoading(false);
+        return;
+      }
+
+      // Prepare job data for Supabase
       const jobData = {
         title: formData.title,
         description: formData.description,
         location: formData.location,
-        remoteOk: formData.remoteOk,
+        remote_ok: formData.remoteOk,
         requirements: requirements,
         responsibilities: responsibilities,
         benefits: benefits,
-        jobType: formData.jobType,
-        experienceLevel: formData.experienceLevel,
-        salaryMin: formData.salaryMin ? parseInt(formData.salaryMin) : null,
-        salaryMax: formData.salaryMax ? parseInt(formData.salaryMax) : null,
-        salaryCurrency: formData.salaryCurrency,
-        categoryId: formData.category || null
+        job_type: formData.jobType,
+        experience_level: formData.experienceLevel,
+        salary_min: formData.salaryMin ? parseInt(formData.salaryMin) : null,
+        salary_max: formData.salaryMax ? parseInt(formData.salaryMax) : null,
+        salary_currency: formData.salaryCurrency,
+        category: formData.category || null,
+        status: 'pending', // Jobs need admin approval
+        created_by: user.id,
+        company_id: profile.company_id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_URL}/jobs`, jobData, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // Insert job into Supabase
+      const { data, error: jobError } = await supabase
+        .from('job_listings')
+        .insert([jobData])
+        .select()
+        .single();
 
-      if (response.data.success) {
-        alert('Job posted successfully! It will be reviewed by admin before going live.');
-        navigate('/employer/dashboard');
-      }
+      if (jobError) throw jobError;
+
+      alert('Job posted successfully! It will be reviewed by admin before going live.');
+      navigate('/employer/dashboard');
       
     } catch (error) {
       console.error('Failed to post job:', error);
       setError(
-        error.response?.data?.error || 
-        error.response?.data?.errors?.[0]?.msg ||
+        error.message || 
         'Failed to post job. Please try again.'
       );
     } finally {

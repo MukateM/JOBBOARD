@@ -9,14 +9,15 @@ import {
   CheckCircle,
   XCircle,
   Eye,
-  Download,
   Filter,
   Search,
   TrendingUp
 } from 'lucide-react';
-import api from '../../services/api';
+import { supabase } from '../../config/supabase'; 
+import { useAuth } from '../../context/AuthContext'; 
 
 export const MyApplications = () => {
+  const { user } = useAuth(); 
   const [applications, setApplications] = useState([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -31,33 +32,72 @@ export const MyApplications = () => {
   });
 
   useEffect(() => {
-    fetchApplications();
-  }, []);
+    if (user) {
+      fetchApplications();
+    }
+  }, [user]); 
 
-  const fetchApplications = async () => {
+   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/applications/me');
       
-      if (response.data.success) {
-        const apps = response.data.applications || [];
-        setApplications(apps);
-        
-        // Calculate stats
-        const stats = {
-          total: apps.length,
-          submitted: apps.filter(app => app.status === 'submitted' || app.status === 'pending').length,
-          reviewing: apps.filter(app => app.status === 'reviewing').length,
-          shortlisted: apps.filter(app => app.status === 'shortlisted').length,
-          rejected: apps.filter(app => app.status === 'rejected').length
-        };
-        setStats(stats);
-      }
+      const { data, error } = await supabase
+        .from('job_applications')
+        .select(`
+          *,
+          job_listings (
+            *,
+            companies (
+              name,
+              logo_url
+            )
+          )
+        `)
+        .eq('applicant_id', user.id) // Use user.id from context
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      setApplications(data || []);
+      
+      // Calculate stats
+      const stats = {
+        total: data.length || 0,
+        submitted: data.filter(app => app.status === 'submitted' || app.status === 'pending').length,
+        reviewing: data.filter(app => app.status === 'reviewing').length,
+        shortlisted: data.filter(app => app.status === 'shortlisted').length,
+        rejected: data.filter(app => app.status === 'rejected').length
+      };
+      setStats(stats);
+      
     } catch (err) {
       console.error('Failed to fetch applications:', err);
       setError('Failed to load applications');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Update handleWithdraw function too:
+  const handleWithdraw = async (applicationId) => {
+    if (!confirm('Are you sure you want to withdraw this application?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('job_applications')
+        .update({ 
+          status: 'withdrawn',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', applicationId)
+        .eq('applicant_id', user.id); // Security check
+
+      if (error) throw error;
+      
+      fetchApplications(); // Refresh the list
+    } catch (err) {
+      console.error('Failed to withdraw application:', err);
+      alert('Failed to withdraw application');
     }
   };
 
@@ -109,18 +149,6 @@ export const MyApplications = () => {
     }
     return true;
   });
-
-  const handleWithdraw = async (applicationId) => {
-    if (!confirm('Are you sure you want to withdraw this application?')) return;
-    
-    try {
-      await api.delete(`/applications/${applicationId}`);
-      fetchApplications(); // Refresh the list
-    } catch (err) {
-      console.error('Failed to withdraw application:', err);
-      alert('Failed to withdraw application');
-    }
-  };
 
   if (loading) {
     return (
