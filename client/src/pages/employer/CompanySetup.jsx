@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../config/supabase';
 import axios from 'axios';
 
 
@@ -7,7 +8,7 @@ export const CompanySetup = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    logo_url: '', // optional for now
+    logo_url: '',
     website: '',
     location: '',
   });

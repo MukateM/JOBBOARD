@@ -13,7 +13,7 @@ import {
   Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
+import { supabase } from '../supabaseClient';
 
 export const JobDetails = () => {
   const { id } = useParams();

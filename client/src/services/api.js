@@ -1,8 +1,5 @@
 import { supabase } from '../config/supabase';
 
-// This is now just a wrapper for backwards compatibility
-// I will gradually replace api.get/post with direct supabase calls
-
 const api = {
   // Auth
   async register(data) {
