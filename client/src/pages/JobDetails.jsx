@@ -28,10 +28,14 @@ export const JobDetails = () => {
     const fetchJob = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`/jobs/${id}`);
-        
-        if (response.data.success) {
-          setJob(response.data.job);
+        const { data, error } = await supabase
+  .from('job_listings')
+  .select(`*, companies (*)`)
+  .eq('id', id)
+  .single();
+
+        if (data) {
+          setJob(data);
         } else {
           setError('Job not found');
         }

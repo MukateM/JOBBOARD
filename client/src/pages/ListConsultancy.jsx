@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Mail, Phone, Globe, MapPin, Users, CheckCircle, Upload } from 'lucide-react';
-import api from '../services/api';
+import { supabase } from '../config/supabase';
 
 export const ListConsultancy = () => {
   const navigate = useNavigate();
@@ -43,9 +43,11 @@ export const ListConsultancy = () => {
       // Log the data being sent for debugging
       console.log('Submitting form data:', formData);
       
-      const response = await api.post('/recruitment-partners', formData);
+      const { data, error } = await supabase
+        .from('recruitment_partners')
+        .insert([formData]);
 
-      if (response.data.success) {
+      if (data) {
         setSuccess(true);
         setTimeout(() => {
           navigate('/');
