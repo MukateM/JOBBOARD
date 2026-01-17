@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../config/supabase';
+import { supabase } from './config/supabase';
 import { useAuth } from '../../context/AuthContext'; 
 
 export const CompanySetup = () => {

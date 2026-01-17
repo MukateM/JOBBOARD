@@ -19,7 +19,6 @@ import {
   TrendingUp,
   Target
 } from 'lucide-react';
-import api from '../../services/api';
 
 export const JobApplications = () => {
   const { jobId } = useParams();
